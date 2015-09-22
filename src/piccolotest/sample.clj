@@ -49,7 +49,7 @@
 ;;the existing hud (it's not being interacted with the user).
 (defn ^PPath ->ellipse [x y w  h]  (PPath/createEllipse x y  w  h))
 (defn ^PPath ->line    [x y x2 y2] (PPath/createLine    x y  x2 y2))
-(defn ^PNode ->text [^String txt] (PText. txt))
+(defn ^PNode ->text    [^String txt] (PText. txt))
 
 ;;like the grapheditor example, we have a layer for nodes and a
 ;;layer for edges.
@@ -84,7 +84,7 @@
 ;;We can start to define higher-order functions on
 ;;scenes (like mapping, filtering, and other traversals).
 ;;Can we derive scenes from existing scenes?
-(defn node-base (atom {}))
+(def node-base (atom {}))
 
 (defn add-shape! [nd]
   (.addChild layer1 nd))
@@ -96,9 +96,25 @@
 (defn wipe-labels!   [])
 (defn wipe-shapes!   [])
 
+(defn ->rect [color x y w h]
+  (PPath/createRectangle x y w h))
+
 ;;Note: the effect of layers rendered later is that
 ;;they overwrite earlier layers.
+
+
+(comment
+  
 (add-label! (->text "Can you see me?"))
 
+
+)
 ;;Also, the default is to set the node at the origin.
 
+
+
+;;The most important thing about pathnodes is that they maintain a boundary (the path) of
+;;where the node exists in space, and they supply bounds tests (via overrides of getBounds and
+;;inBounds I think).
+
+;;Lets make a bunch of infinite rectangles.
