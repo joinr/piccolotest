@@ -211,19 +211,20 @@ Single argument is ignoredso that this fcn can be used by iterate."
             (startDrag [e]
               (proxy-super startDrag e)
               (.setHandled e true)
-              ;(. (. e getPickedNode)
-               ;  moveToFront)
+              (. (. e getPickedNode)
+                 moveToFront)
               )
             (drag [e]
               (proxy-super drag e)
-              (let [node (.getPickedNode e)
-                    edges (.getAttribute node "edges")
-                    num-used-limit (.getAttribute node "num-used")]
-                (loop [index 0]
-                  (if (< index num-used-limit)
-                    (do
-                      (update-edge (aget edges index))
-                      (recur (inc index))))))))]
+              ;; (let [node (.getPickedNode e)
+              ;;       edges (.getAttribute node "edges")
+              ;;       num-used-limit (.getAttribute node "num-used")]
+              ;;   (loop [index 0]
+              ;;     (if (< index num-used-limit)
+              ;;       (do
+              ;;         (update-edge (aget edges index))
+              ;;         (recur (inc index))))))
+              ))]
 
       (.setOrMask filter (+ InputEvent/BUTTON1_MASK
                            InputEvent/BUTTON3_MASK))

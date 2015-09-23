@@ -6,7 +6,7 @@
    [org.piccolo2d         PCanvas PLayer PNode PRoot]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
                           PInputEvent PInputEventFilter]
-   [org.piccolo2d.nodes   PPath PImage PText]
+   [org.piccolo2d.nodes   PPath PImage PText PShape]
    [org.piccolo2d.util   PBounds]
    [org.piccolo2d.extras.event
     PSelectionEventHandler
@@ -100,7 +100,7 @@
 
 (defn wipe-children! [nd])
 (defn wipe-labels!   [])
-(defn wipe-shapes!   [])
+(defn wipe-shapes!   [] (.removeAllChildren layer1))
 
 (defn ^PNode ->rect [color x y w h]
   (doto
@@ -131,17 +131,24 @@
 ;;How about event layers?
 ;;We already have samplers....
 ;;Can we define an eventdb that lets us see these samples over time?
+(def rcount (atom 0))
+
+(defn merge-att [^PShape n m]
+  (doseq [[k v] m]
+    (.addAttribute n (str k) (str v)))
+  n)
 
 (defn ^PNode ->random-rect []
-  (doto (->rect (java.awt.Color. (int (rand-int 256)) (int (rand-int 256)) (int (rand-int 256))) 0 0 100 80)         
-    (.translate (* 10000 (rand)) (* 10000 (rand)))))
+  (let [n @rcount
+        _ (swap! rcount inc)]
+    (-> (doto (->rect (java.awt.Color. (int (rand-int 256)) (int (rand-int 256)) (int (rand-int 256))) 0 0 100 80)         
+          (.translate (* 10000 (rand)) (* 10000 (rand)))
+          (merge-att {"name" (str "Rect_" n)})))))
 
 (defn add-n-rects [& {:keys [n] :or {n 1000}}]
   (dotimes [i n]
     (add-shape! (->random-rect))))
     
-;(extend-protocol clojure.lang.Seqable
-
 
 (defn ^PNode rotate [^PNode n ^double deg]
   (doto n (.rotate deg)))
@@ -151,7 +158,10 @@
 (def frame (atom nil))
 
 (defn show! []
-  (let [f (gui/toggle-top (gui/display-simple my-canvas))]
+  (let [f (gui/toggle-top ;(gui/shelf
+           (gui/display-simple my-canvas))
+    ;    )
+    ]
     (reset! frame f)
     f))
 ;;rotate all the rects....
@@ -178,6 +188,8 @@
                           (.repaint ^PCanvas my-canvas)
                           (Thread/sleep 16)))))
 
+
+
 ;;We might consider wrapping an entire scene (a canvas), and providing idiomatic
 ;;bindings to alter it (either with callbacks or channels).
 
@@ -194,6 +206,18 @@
 ;;We then just filter based on event.
 ;;That's a way to add interactive layering (or alternately, add multiple layers).
 
+(defn alter-defaults []
+  (let [ph (.getPanEventHandler my-canvas)
+        zh (.getZoomEventHandler my-canvas)
+        pf (.getEventFilter ph)
+        zf (.getEventFilter zh)
+ ;       pm (.setOrMask pf)
+        _  (.setAndMask pf (+ InputEvent/BUTTON1_MASK  InputEvent/CTRL_MASK))
+;        zm (.setOrMask zf)
+        _  (.setAndMask zf ( + InputEvent/BUTTON3_MASK InputEvent/CTRL_MASK))
+        ]
+    nil))
+            
 (comment 
 ;; // Create a selection event handler
 ;; final PSelectionEventHandler selectionEventHandler = new PSelectionEventHandler(getCanvas().getLayer(),
@@ -204,6 +228,9 @@
 
 ;;No idea what this is doing, but we'll use it...
 
+  (defn remove-defaults []
+    (do (.removeInputEventListener  my-canvas (.getPanEventHandler my-canvas))
+        (.removeInputEventListener my-canvas  (.getZoomEventHandler my-canvas))))
 
 ;; PNotificationCenter.defaultCenter().addListener(this, "selectionChanged",
 ;;         PSelectionEventHandler.SELECTION_CHANGED_NOTIFICATION, selectionEventHandler);
@@ -211,8 +238,11 @@
 ;;Just a guess, we eat two layers to define a selection input, not sure if this will interact poorly
 ;;with our pan handler.  This automatically installs a selection tool that will highlight
 ;;the  geometry, allow multiple selection semantics, etc.  
-(def selected! ;;we can override the handling here...
-  (PSelectionEventHandler.  layer1, layer1))
+  (def selected! ;;we can override the handling here...
+    (let [sel  (PSelectionEventHandler.  layer1, layer1)
+          ef   (.getEventFilter sel)
+          _    (.setAndMask ef  (+ InputEvent/BUTTON1_MASK  InputEvent/SHIFT_MASK))]
+      sel))
 
 ;;We can interact with the selection handler, like query the active selections.
 
@@ -223,12 +253,18 @@
 ;;     (do (proxy-super keyPressed ev)
 ;;         (println "keyPressed" ev))))
 
+
+;;ideally, we toggle the selected nodes...
 (def notifications (PNotificationCenter/defaultCenter))
-
-
+;;Ths attached our canvas selector....we should have it filter so that we
+;;only every select if the ctrl key is down.
 (do (.addInputEventListener my-canvas selected!) ;break this out in a function
     (..  my-canvas getRoot getDefaultInputManager (setKeyboardFocus selected!))
     )
+
+)
+
+
 (comment
   
 (defn update-edge
@@ -266,8 +302,8 @@
             (. (. e getPickedNode) moveToFront))
           (drag [^PInputEvent e]
             (proxy-super drag e)
-            (let [node (.getPickedNode e)
-                  edges (.getAttribute node "edges")
+            (let [node           (.getPickedNode e)
+                  edges          (.getAttribute node "edges")
                   num-used-limit (.getAttribute node "num-used")]
               (loop [index 0]
                 (if (< index num-used-limit)
@@ -277,3 +313,25 @@
     (doto custom-handler (.setEventFilter  filter))
     (.addInputEventListener l custom-handler)))
 )
+
+
+        ;; camera.addInputEventListener(new PBasicInputEventHandler() {
+        ;;     public void mouseMoved(final PInputEvent event) {
+        ;;         updateToolTip(event);
+        ;;     }
+
+        ;;     public void mouseDragged(final PInputEvent event) {
+        ;;         updateToolTip(event);
+        ;;     }
+
+        ;;     public void updateToolTip(final PInputEvent event) {
+        ;;         final PNode n = event.getPickedNode();
+        ;;         final String tooltipString = (String) n.getAttribute("tooltip");
+        ;;         final Point2D p = event.getCanvasPosition();
+
+        ;;         event.getPath().canvasToLocal(p, camera);
+
+        ;;         tooltipNode.setText(tooltipString);
+        ;;         tooltipNode.setOffset(p.getX() + 8, p.getY() - 8);
+        ;;     }
+        ;; }
