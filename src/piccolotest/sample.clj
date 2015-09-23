@@ -1,11 +1,11 @@
 (ns piccolotest.sample
   (:require [spork.cljgui.components.swing :as swing])
   (:import
-   [edu.umd.cs.piccolo         PCanvas PLayer PNode PRoot]
-   [edu.umd.cs.piccolo.event   PBasicInputEventHandler PDragEventHandler
+   [org.piccolo2d         PCanvas PLayer PNode PRoot]
+   [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
                                PInputEvent PInputEventFilter]
-   [edu.umd.cs.piccolo.nodes   PPath PImage PText]
-   [edu.umd.cs.piccolo.util   PBounds]
+   [org.piccolo2d.nodes   PPath PImage PText]
+   [org.piccolo2d.util   PBounds]
    [java.awt Color Dimension Graphics2D]
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D]
@@ -98,7 +98,7 @@
 
 (defn ^PNode ->rect [color x y w h]
   (doto
-      (PPath/createRectangle x y w h)
+      (PPath/createRectangle (double x) (double y) (double w) (double h))
       (.setPaint color)))
 
 ;;Note: the effect of layers rendered later is that
@@ -130,16 +130,43 @@
   (doto (->rect (java.awt.Color. (int (rand-int 256)) (int (rand-int 256)) (int (rand-int 256))) 0 0 100 80)         
     (.translate (* 10000 (rand)) (* 10000 (rand)))))
 
-
+(defn add-n-rects [& {:keys [n] :or {n 1000}}]
+  (dotimes [i n]
+    (add-shape! (->random-rect))))
+    
 ;(extend-protocol clojure.lang.Seqable
 
 
 (defn ^PNode rotate [^PNode n ^double deg]
   (doto n (.rotate deg)))
 
-(defn show! [] (swing/toggle-top (swing/display-simple my-canvas)))
+;; (defn rotate-rects! []
+;;   (
+(def frame (atom nil))
+
+(defn show! []
+  (let [f (swing/toggle-top (swing/display-simple my-canvas))]
+    (reset! frame f)
+    f))
 ;;rotate all the rects....
 
+(defn layer-bounds [](.getGlobalFullBounds layer1))
+
 (defn center! []
-  (.. my-canvas getCamera animateViewToCenterBounds (.getGlobalFullBounds layer1)))
-  getCanvas().getCamera().animateViewToCenterBounds(layer.getGlobalFullBounds
+  (doto (.. my-canvas getCamera)
+    (.animateViewToCenterBounds  (layer-bounds) true 0)))
+
+;;we also want to do stuff...
+(defn shapes [^PLayer l]
+  (iterator-seq (.. l getChildrenReference iterator)))
+
+(defn map-layer [f l]
+  (transduce (map f) (fn [acc _] acc) l (shapes l)))
+(defn do-layer [f l]
+  (reduce (fn [acc s] (do (f s) acc)) l (shapes l)))
+
+;(defn task (atom nil))
+(defn animate! []
+  (future (while true (do (do-layer (fn [n] (rotate n 2)) layer1)
+                          (.repaint ^PCanvas my-canvas)
+                          (Thread/sleep 100)))))
