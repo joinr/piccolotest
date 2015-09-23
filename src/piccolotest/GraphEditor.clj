@@ -1,23 +1,15 @@
-(ns piccolotest.core
-  (:import [piccolotest.GraphEditor]
-           [javax.swing JFrame]))
-
-(defn -main
-  "Roughly corresponds to the Java code in GraphEditorTester.java"
-  []
-  (let [window (JFrame.)
-        ge (piccolotest.GraphEditor. 500 500)]
-    (println "... got to beginning of let")
-    (doto window
-      (.setTitle "Piccolo Graphics Editor")
-      (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE))
-    (.add (.getContentPane window) ge)
-    (println "... got to adding Graphics Editor to window")
-    (doto window
-      (.pack)
-      (.setVisible true)))
-  (println "Goodbye!"))
- 
+(ns piccolotest.GraphEditor
+  (:import
+   (org.piccolo2d   PCanvas PLayer PNode PRoot)
+   (org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
+                               PInputEvent PInputEventFilter)
+   (org.piccolo2d.nodes   PPath)
+   (org.piccolo2d.util   PBounds)
+   (java.awt Color Dimension Graphics2D)
+   (java.awt.event   InputEvent MouseEvent)
+   (java.awt.geom   Point2D)
+   (javax.swing   JFrame)
+   (java.util   ArrayList Random)))
   
 ; This is the "Graph Editor" sample program for the Piccolo2D structured 2D
 ; graphics framework. It draws 50 circular nodes, then draws 50 lines
@@ -53,7 +45,7 @@
  ; The gen-class below dictates that org.piccolo2d.PCanvas.GraphEditor
  ; be created as a full Java class. This can't be done using proxy because
  ; the GraphEditor class adds a new method, update-edge.
- (:gen-class
+ (gen-class
    :extends org.piccolo2d.PCanvas
    :state state
    :init init
@@ -61,7 +53,8 @@
    ; the line below says that the constructor for this class takes two int
    ; arguments, while the constructor for its superclass, PCanvas, takes none.
    :constructors {[int int] []}
-   :methods [ [update-edge [org.piccolo2d.nodes.PPath] void] ]))
+   ;:methods [ [update-edge [org.piccolo2d.nodes.PPath] void] ]
+   )
 
 (defn -init
   "Specifies arguments of class's constructor; returns
@@ -77,6 +70,19 @@
     (aset (.getAttribute node "edges") current-count edge)
     (println (str "edge " edge " added to " node " at position " current-count))
     (.addAttribute node "num-used" (inc current-count))))
+
+(defn update-edge
+      "Draws this edge, either initially or after endpoint node has been moved."
+      [edge]
+      (let [node1 (aget (.getAttribute edge "nodes") 0)
+            node2 (aget (.getAttribute edge "nodes") 1)
+            start (.. node1 getFullBoundsReference getCenter2D)
+            end   (.. node2 getFullBoundsReference getCenter2D)]
+        (.reset edge)
+        (println (str "update-edge: draw from (" (.getX start) " "  (.getY start)
+                      ") to (" (.getX end) " "  (.getY end) ")" ))
+        (.moveTo edge (.getX start) (.getY start))
+        (.lineTo edge (.getX end) (.getY end))))
 
 (defn add-to-edge
   "Adds node to the Java array \"nodes\" attached to edge."
@@ -119,18 +125,7 @@ has executed. \"this\" refers to the new GraphEditor that has been created."
       (.addAttribute edge "nodes" (make-array PPath num-nodes-per-edge))
       (.addAttribute edge "num-used" 0))
 
-    (defn update-edge
-      "Draws this edge, either initially or after endpoint node has been moved."
-      [edge]
-      (let [node1 (aget (.getAttribute edge "nodes") 0)
-            node2 (aget (.getAttribute edge "nodes") 1)
-            start (.. node1 getFullBoundsReference getCenter2D)
-            end   (.. node2 getFullBoundsReference getCenter2D)]
-        (.reset edge)
-        (println (str "update-edge: draw from (" (.getX start) " "  (.getY start)
-                   ") to (" (.getX end) " "  (.getY end) ")" ))
-        (.moveTo edge (.getX start) (.getY start))
-        (.lineTo edge (.getX end) (.getY end))))
+
 
     (.addChild (.getRoot this) edge-layer)
     (.addLayer (.getCamera this) 0 edge-layer)
@@ -232,19 +227,3 @@ Single argument is ignoredso that this fcn can be used by iterate."
                            InputEvent/BUTTON3_MASK))
       (.setEventFilter custom-handler filter)
       (.addInputEventListener node-layer custom-handler))))
-
-(defn -main
-  "Roughly corresponds to the Java code in GraphEditorTester.java"
-  []
-  (let [window (JFrame.)
-        ge (org.piccolo2d.PCanvas.GraphEditor. 500 500)]
-    (println "... got to beginning of let")
-    (doto window
-      (.setTitle "Piccolo Graphics Editor")
-      (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE))
-    (.add (.getContentPane window) ge)
-    (println "... got to adding Graphics Editor to window")
-    (doto window
-      (.pack)
-      (.setVisible true)))
-  (println "Goodbye!"))

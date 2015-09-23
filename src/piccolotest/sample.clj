@@ -1,11 +1,17 @@
 (ns piccolotest.sample
-  (:require [spork.cljgui.components.swing :as swing])
+  (:require [spork.cljgui.components.swing :as gui]
+            [spork.graphics2d.canvas :as canvas]
+            [spork.graphics2d.swing :as swing])
   (:import
    [org.piccolo2d         PCanvas PLayer PNode PRoot]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
-                               PInputEvent PInputEventFilter]
+                          PInputEvent PInputEventFilter]
    [org.piccolo2d.nodes   PPath PImage PText]
    [org.piccolo2d.util   PBounds]
+   [org.piccolo2d.extras.event
+    PSelectionEventHandler
+    PNotification
+    PNotificationCenter]
    [java.awt Color Dimension Graphics2D]
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D]
@@ -99,7 +105,7 @@
 (defn ^PNode ->rect [color x y w h]
   (doto
       (PPath/createRectangle (double x) (double y) (double w) (double h))
-      (.setPaint color)))
+      (.setPaint (swing/get-gui-color color))))
 
 ;;Note: the effect of layers rendered later is that
 ;;they overwrite earlier layers.
@@ -145,7 +151,7 @@
 (def frame (atom nil))
 
 (defn show! []
-  (let [f (swing/toggle-top (swing/display-simple my-canvas))]
+  (let [f (gui/toggle-top (gui/display-simple my-canvas))]
     (reset! frame f)
     f))
 ;;rotate all the rects....
@@ -165,8 +171,109 @@
 (defn do-layer [f l]
   (reduce (fn [acc s] (do (f s) acc)) l (shapes l)))
 
-;(defn task (atom nil))
+;;This is actually pretty performant, there's some garbage being generated
+;;due to affine transforms.
 (defn animate! []
-  (future (while true (do (do-layer (fn [n] (rotate n 2)) layer1)
+  (future (while true (do (do-layer (fn [n] (rotate n (Math/toRadians 2.0))) layer1)
                           (.repaint ^PCanvas my-canvas)
-                          (Thread/sleep 100)))))
+                          (Thread/sleep 16)))))
+
+;;We might consider wrapping an entire scene (a canvas), and providing idiomatic
+;;bindings to alter it (either with callbacks or channels).
+
+;;lets add some picking and see how the performance alters.
+;;we can put a little gui hud together that displays the property list
+;;for the selected object.  That should translate over to a track selector with
+;;the hierarchy:
+;;  tracks -> track -> event
+;;For added utility, we'll add a timeline that keeps track with the
+;;vertical time horizon of the current track.
+
+;;a track is just a rectangle (as a background), with some events
+;;laid out as children.
+;;We then just filter based on event.
+;;That's a way to add interactive layering (or alternately, add multiple layers).
+
+(comment 
+;; // Create a selection event handler
+;; final PSelectionEventHandler selectionEventHandler = new PSelectionEventHandler(getCanvas().getLayer(),
+;;         getCanvas().getLayer());
+;; getCanvas().addInputEventListener(selectionEventHandler);
+;; getCanvas().getRoot().getDefaultInputManager().setKeyboardFocus(selectionEventHandler);
+
+
+;;No idea what this is doing, but we'll use it...
+
+
+;; PNotificationCenter.defaultCenter().addListener(this, "selectionChanged",
+;;         PSelectionEventHandler.SELECTION_CHANGED_NOTIFICATION, selectionEventHandler);
+
+;;Just a guess, we eat two layers to define a selection input, not sure if this will interact poorly
+;;with our pan handler.  This automatically installs a selection tool that will highlight
+;;the  geometry, allow multiple selection semantics, etc.  
+(def selected! ;;we can override the handling here...
+  (PSelectionEventHandler.  layer1, layer1))
+
+;;We can interact with the selection handler, like query the active selections.
+
+;;Selection changes are friggin wierd.
+
+;; (proxy [PSelectionEventHandler] [l r]
+;;   (keyPressed [^PInputEvent ev]
+;;     (do (proxy-super keyPressed ev)
+;;         (println "keyPressed" ev))))
+
+(def notifications (PNotificationCenter/defaultCenter))
+
+
+(do (.addInputEventListener my-canvas selected!) ;break this out in a function
+    (..  my-canvas getRoot getDefaultInputManager (setKeyboardFocus selected!))
+    )
+(comment
+  
+(defn update-edge
+  "Draws this edge, either initially or after endpoint node has been moved."
+  [node]
+  (let [start (.. node getFullBoundsReference getCenter2D)]
+    (.reset edge)
+        (println (str "update-edge: draw from (" (.getX start) " "  (.getY start)
+                      ") to (" (.getX end) " "  (.getY end) ")" ))
+        (.moveTo edge (.getX start) (.getY start))
+        (.lineTo edge (.getX end) (.getY end))))
+)
+
+(comment
+
+(defn add-color-picker! []
+  ;;Poached from greg's code.
+  (let [filter (PInputEventFilter.)
+        _      (.setOrMask filter (+ InputEvent/BUTTON1_MASK
+                                     InputEvent/BUTTON3_MASK))
+        custom-handler   ; its value is on next line
+        
+        (proxy [PDragEventHandler] []
+          (mouseEntered [^PInputEvent e]
+            (proxy-super mouseEntered e)
+            (if (= (.getButton e) MouseEvent/NOBUTTON)
+              (. (. e getPickedNode) setPaint Color/RED)))
+          (mouseExited [^PInputEvent e]
+            (proxy-super mouseExited e)
+            (if (= (.getButton e) MouseEvent/NOBUTTON)
+              (. (. e getPickedNode) setPaint Color/WHITE)))
+          (startDrag [^PInputEvent e]
+            (proxy-super startDrag e)
+            (.setHandled e true)
+            (. (. e getPickedNode) moveToFront))
+          (drag [^PInputEvent e]
+            (proxy-super drag e)
+            (let [node (.getPickedNode e)
+                  edges (.getAttribute node "edges")
+                  num-used-limit (.getAttribute node "num-used")]
+              (loop [index 0]
+                (if (< index num-used-limit)
+                  (do
+                    (update-edge (aget edges index))
+                    (recur (inc index))))))))]
+    (doto custom-handler (.setEventFilter  filter))
+    (.addInputEventListener l custom-handler)))
+)
