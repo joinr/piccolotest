@@ -96,8 +96,10 @@
 (defn wipe-labels!   [])
 (defn wipe-shapes!   [])
 
-(defn ->rect [color x y w h]
-  (PPath/createRectangle x y w h))
+(defn ^PNode ->rect [color x y w h]
+  (doto
+      (PPath/createRectangle x y w h)
+      (.setPaint color)))
 
 ;;Note: the effect of layers rendered later is that
 ;;they overwrite earlier layers.
@@ -118,3 +120,26 @@
 ;;inBounds I think).
 
 ;;Lets make a bunch of infinite rectangles.
+
+;;Can we define an event database?
+;;How about event layers?
+;;We already have samplers....
+;;Can we define an eventdb that lets us see these samples over time?
+
+(defn ^PNode ->random-rect []
+  (doto (->rect (java.awt.Color. (int (rand-int 256)) (int (rand-int 256)) (int (rand-int 256))) 0 0 100 80)         
+    (.translate (* 10000 (rand)) (* 10000 (rand)))))
+
+
+;(extend-protocol clojure.lang.Seqable
+
+
+(defn ^PNode rotate [^PNode n ^double deg]
+  (doto n (.rotate deg)))
+
+(defn show! [] (swing/toggle-top (swing/display-simple my-canvas)))
+;;rotate all the rects....
+
+(defn center! []
+  (.. my-canvas getCamera animateViewToCenterBounds (.getGlobalFullBounds layer1)))
+  getCanvas().getCamera().animateViewToCenterBounds(layer.getGlobalFullBounds
