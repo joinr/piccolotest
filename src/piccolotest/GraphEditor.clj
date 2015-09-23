@@ -108,10 +108,10 @@
           (if (zero? x)
             result   ; returned if true
             (recur (conj result (PPath/createEllipse
-                                  (.nextInt random width)
-                                  (.nextInt random height)
-                                  20
-                                  20))
+                                  (double (.nextInt random width))
+                                  (double (.nextInt random height))
+                                  20.0
+                                  20.0))
               (dec x))))   ; returned if false
         num-nodes-per-edge   2
         seed-number 50
@@ -149,7 +149,7 @@ Single argument is ignoredso that this fcn can be used by iterate."
       [pair]
       (let [n1 (nth pair 0)
             n2 (nth pair 1)
-            edge  (org.piccolo2d.nodes.PPath/createLine 0 0 100 100)
+            edge  (org.piccolo2d.nodes.PPath/createLine 0.0 0.0 100.0 100.0)
             node1 (.getChild node-layer n1)
             node2 (.getChild node-layer n2)]
         (println (str  "Processing node " pair))
@@ -211,7 +211,9 @@ Single argument is ignoredso that this fcn can be used by iterate."
             (startDrag [e]
               (proxy-super startDrag e)
               (.setHandled e true)
-              (. (. e getPickedNode) moveToFront))
+              ;(. (. e getPickedNode)
+               ;  moveToFront)
+              )
             (drag [e]
               (proxy-super drag e)
               (let [node (.getPickedNode e)
