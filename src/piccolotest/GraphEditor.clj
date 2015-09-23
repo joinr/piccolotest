@@ -9,7 +9,8 @@
    (java.awt.event   InputEvent MouseEvent)
    (java.awt.geom   Point2D)
    (javax.swing   JFrame)
-   (java.util   ArrayList Random)))
+   (java.util   ArrayList Random)
+   ))
   
 ; This is the "Graph Editor" sample program for the Piccolo2D structured 2D
 ; graphics framework. It draws 50 circular nodes, then draws 50 lines
@@ -49,12 +50,12 @@
    :extends org.piccolo2d.PCanvas
    :state state
    :init init
+   :name  piccolotest.GraphEditor
    :post-init GraphEditorInit
-   ; the line below says that the constructor for this class takes two int
-   ; arguments, while the constructor for its superclass, PCanvas, takes none.
    :constructors {[int int] []}
-   ;:methods [ [update-edge [org.piccolo2d.nodes.PPath] void] ]
-   )
+    )
+
+  ;:methods [ [updateedge [org.piccolo2d.nodes.PPath] void] ]
 
 (defn -init
   "Specifies arguments of class's constructor; returns
@@ -71,19 +72,6 @@
     (println (str "edge " edge " added to " node " at position " current-count))
     (.addAttribute node "num-used" (inc current-count))))
 
-(defn update-edge
-      "Draws this edge, either initially or after endpoint node has been moved."
-      [edge]
-      (let [node1 (aget (.getAttribute edge "nodes") 0)
-            node2 (aget (.getAttribute edge "nodes") 1)
-            start (.. node1 getFullBoundsReference getCenter2D)
-            end   (.. node2 getFullBoundsReference getCenter2D)]
-        (.reset edge)
-        (println (str "update-edge: draw from (" (.getX start) " "  (.getY start)
-                      ") to (" (.getX end) " "  (.getY end) ")" ))
-        (.moveTo edge (.getX start) (.getY start))
-        (.lineTo edge (.getX end) (.getY end))))
-
 (defn add-to-edge
   "Adds node to the Java array \"nodes\" attached to edge."
   [edge node]
@@ -93,12 +81,26 @@
     (println (str "node " node " added to " edge " at position " current-count))
     (.addAttribute edge "num-used" (inc current-count))))
 
+(defn update-edge
+      "Draws this edge, either initially or after endpoint node has been moved."
+      [edge]
+      (let [node1 (aget (.getAttribute edge "nodes") 0)
+            node2 (aget (.getAttribute edge "nodes") 1)
+            start (.. node1 getFullBoundsReference getCenter2D)
+            end   (.. node2 getFullBoundsReference getCenter2D)]
+        (.reset edge)
+        (println (str "updateedge: draw from (" (.getX start) " "  (.getY start)
+                      ") to (" (.getX end) " "  (.getY end) ")" ))
+        (.moveTo edge (.getX start) (.getY start))
+        (.lineTo edge (.getX end) (.getY end))))
+
 (defn -GraphEditorInit
-  "Post-initialization function that runs after superclass constructor
-has executed. \"this\" refers to the new GraphEditor that has been created."
+  "Post-initialization function that runs after superclass constructor 
+   has executed. \"this\" refers to the new GraphEditor that has been created."
   [this width height]
   (.setPreferredSize this (Dimension. width height))
-  (let [{:keys [num-edges num-nodes random]} (.state this)
+  (let [ 
+        {:keys [num-edges num-nodes random]} (.state this)
         node-layer (.getLayer this)
         edge-layer (PLayer.)
         node-vector   ; its value is on next line
@@ -125,8 +127,6 @@ has executed. \"this\" refers to the new GraphEditor that has been created."
       (.addAttribute edge "nodes" (make-array PPath num-nodes-per-edge))
       (.addAttribute edge "num-used" 0))
 
-
-
     (.addChild (.getRoot this) edge-layer)
     (.addLayer (.getCamera this) 0 edge-layer)
 
@@ -149,7 +149,7 @@ Single argument is ignoredso that this fcn can be used by iterate."
       [pair]
       (let [n1 (nth pair 0)
             n2 (nth pair 1)
-            edge (PPath.)
+            edge  (org.piccolo2d.nodes.PPath/createLine 0 0 100 100)
             node1 (.getChild node-layer n1)
             node2 (.getChild node-layer n2)]
         (println (str  "Processing node " pair))
