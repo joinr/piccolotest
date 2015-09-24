@@ -37,7 +37,7 @@
      (doto
        (PPath/createRectangle (double x) (double y) (double w) (double h))
        (.setPaint (swing/get-gui-color color)))
-     (with-meta meta)))
+     (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
 
 ;(defn beside [xs])
@@ -45,12 +45,29 @@
     
 (defn ->cell [row col w h]
   (->rect :white (* col w)
-                 6(* row h) w h {:row row :col col}))
+          (* row h) w h {:row row :col col}))
 
+(defn add-child! [p c] (doto p (.addChild c)))
+
+(defn cells [t] (:cells (node-meta t)))
+;(defn get-cell [t row col])
+       
+;;a table is a layer of cells.
+;;canvas is a panel, layers are groupings of shapes that confer
+;;and respond to events with eachother.
 (defn ->table [rows cols w h]
-  )
-  
+  (let [cell-data   (into []
+                      (for [row (range rows)
+                            col (range cols)]
+                       [[row col] (->cell row col w h)]))
+        cells  (reduce (fn [acc [[row coll] c]]
+                         (let [rs (get acc row {})
+                               cols (assoc rs coll c)]
+                           (assoc acc row rs))) {} cell-data)        
 
+        background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
+       (reduce add-child! background (map second  cell-data))))
+        
 
 ;;We can create a node canvas....
 ;;Basically, we want to maintain information on every node...
@@ -211,7 +228,7 @@
 
 )
 
-(defn ->labeled-box [lbl 
+;(defn ->labeled-box [lbl 
 ;;Also, the default is to set the node at the origin.
 
 
