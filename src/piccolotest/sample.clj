@@ -65,6 +65,7 @@
         background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
        (reduce add-child! background (map second  cell-data))))
 
+(defn ->srm-table [units w h] (->table units 28 60 20))
 (defn cells [t] (:cells (node-meta t)))
 (defn get-cell [t row col] (get (get (cells t) row) col))
 ;;we'd like to listen to individual cells too...
