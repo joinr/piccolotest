@@ -49,9 +49,6 @@
 
 (defn add-child! [p c] (doto p (.addChild c)))
 
-(defn cells [t] (:cells (node-meta t)))
-;(defn get-cell [t row col])
-       
 ;;a table is a layer of cells.
 ;;canvas is a panel, layers are groupings of shapes that confer
 ;;and respond to events with eachother.
@@ -61,13 +58,17 @@
                             col (range cols)]
                        [[row col] (->cell row col w h)]))
         cells  (reduce (fn [acc [[row coll] c]]
-                         (let [rs (get acc row {})
-                               cols (assoc rs coll c)]
-                           (assoc acc row rs))) {} cell-data)        
+                         (let [rw (get acc row {})
+                               cols (assoc rw coll c)]
+                           (assoc acc row cols))) {} cell-data)        
 
         background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
        (reduce add-child! background (map second  cell-data))))
-        
+
+(defn cells [t] (:cells (node-meta t)))
+(defn get-cell [t row col] (get (get (cells t) row) col))
+;;we'd like to listen to individual cells too...
+
 
 ;;We can create a node canvas....
 ;;Basically, we want to maintain information on every node...
