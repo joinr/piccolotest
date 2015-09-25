@@ -22,6 +22,17 @@
 
 ;;Useful protocol 
 
+;;nodes communicate via a node channel
+(def node-channel (chan (a/dropping-buffer 100)))
+
+(defn notify! [msg]
+  (go (a/put! node-channel msg)))
+
+(defn notify!! [msg]
+  (>!! node-channel msg))
+
+
+
 (defprotocol MetaNode
   (node-meta [nd])
   (with-node-meta [nd m]))
@@ -47,7 +58,18 @@
   (->rect :white (* col w)
           (* row h) w h {:row row :col col}))
 
-(defn add-child! [p c] (doto p (.addChild c)))
+(defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
+
+;;so layers can act like groups.  They are also nodes...
+(defn ->layer
+  ([xs meta]
+   (reduce (fn [^PLayer acc ^PNode n]
+             (doto acc (.addChild n)))
+           (doto (PLayer.) (.addAttribute "meta" meta)) xs))
+  ([xs] (->layer xs {}))
+  ([]   (->layer nil  {})))
+
+;;we'd like to add listeners...
 
 ;;a table is a layer of cells.
 ;;canvas is a panel, layers are groupings of shapes that confer
@@ -60,10 +82,10 @@
         cells  (reduce (fn [acc [[row coll] c]]
                          (let [rw (get acc row {})
                                cols (assoc rw coll c)]
-                           (assoc acc row cols))) {} cell-data)        
+                           (assoc acc row cols))) {} cell-data)]        
 
-        background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
-       (reduce add-child! background (map second  cell-data))))
+       ; background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
+       (->layer (map second  cell-data) {:cells cells})))
 
 (defn ->srm-table [units w h] (->table units 28 60 20))
 (defn cells [t] (:cells (node-meta t)))
