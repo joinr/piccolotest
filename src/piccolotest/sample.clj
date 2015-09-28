@@ -14,6 +14,7 @@
     PSelectionEventHandler
     PNotification
     PNotificationCenter]
+   [org.piccolo2d.extras.pswing PSwing PSwingCanvas] 
    [java.awt Color Dimension Graphics2D]
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D]
@@ -31,13 +32,11 @@
 (defn notify!! [msg]
   (>!! node-channel msg))
 
-
-
 (defprotocol MetaNode
   (node-meta [nd])
   (with-node-meta [nd m]))
                        
-(extend-type org.piccolo2d.nodes.PShape
+(extend-type org.piccolo2d.PNode
   MetaNode
   (node-meta [obj]         (.getAttribute obj "meta"))
   (with-node-meta [obj m]  (.addAttribute obj "meta" m) obj))
@@ -50,6 +49,13 @@
        (.setPaint (swing/get-gui-color color)))
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
+
+
+(defn ^PNode ->image
+  ([source meta] (->  (PImage. source)
+                      (with-node-meta meta)))
+  ([source] (->image source {})))
+
 
 ;(defn beside [xs])
 ;(defn above  [xs])
@@ -66,8 +72,13 @@
    (reduce (fn [^PLayer acc ^PNode n]
              (doto acc (.addChild n)))
            (doto (PLayer.) (.addAttribute "meta" meta)) xs))
-  ([xs] (->layer xs {}))
+  ([xs] (->layer xs   {}))
   ([]   (->layer nil  {})))
+
+
+(defn ->panel [^JPanel pnl]  (PSwing. pnl))
+(defn ->swing-canvas [pnl]
+  (PSwingCanvas. pnl))
 
 ;;we'd like to add listeners...
 
