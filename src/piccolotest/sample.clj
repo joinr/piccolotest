@@ -14,11 +14,15 @@
     PSelectionEventHandler
     PNotification
     PNotificationCenter]
-   [org.piccolo2d.extras.pswing PSwing PSwingCanvas] 
-   [java.awt Color Dimension Graphics2D]
+   [org.piccolo2d.extras.pswing PSwing PSwingCanvas ]
+   [org.piccolo2d.extras.swing SwingLayoutNode]
+   [org.piccolo2d.extras.swing.SwingLayoutNode.Anchor]
+
+   [java.awt Color Dimension Graphics2D  GridBagConstraints GridBagLayout BorderLayout FlowLayout 
+    GridLayout  Component Insets]
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D]
-   [javax.swing     JFrame]
+   [javax.swing     JFrame JPanel Box BoxLayout] 
    [java.util  ArrayList Random]))
 
 ;;Useful protocol 
@@ -76,9 +80,35 @@
   ([]   (->layer nil  {})))
 
 
-(defn ->panel [^JPanel pnl]  (PSwing. pnl))
+(defn ->panel [^JPanel pnl]
+  (doto (PSwing. pnl)
+    ;(.setUseBufferedPainting true)
+    ))
+
+;;note: a canvas is a panel...
 (defn ->swing-canvas [pnl]
-  (PSwingCanvas. pnl))
+  (doto 
+      (PSwingCanvas.)
+    (.addChild pnl)))
+
+
+;;This works just like our good old fashioned combinators from cljgui
+(defn ^PNode shelf [& components]
+  (let [shelf (SwingLayoutNode. ) ]
+    (doseq [c components] (.addChild shelf c))
+    shelf))
+
+(defn ^PNode stack [& components]
+  (let [container (JPanel.)
+        box (BoxLayout. container BoxLayout/PAGE_AXIS)
+        _ (.setLayout container box)
+        stack (SwingLayoutNode. container)]
+     (doseq [^PNode c components]
+       ;(.setAlignmentX c Component/CENTER_ALIGNMENT)
+       (.addChild stack 
+            c))
+    stack))
+
 
 ;;we'd like to add listeners...
 
@@ -330,6 +360,133 @@
 (defn do-layer [f l]
   (reduce (fn [acc s] (do (f s) acc)) l (shapes l)))
 
+
+(defn ->shelf
+  [& nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double xoffset ^PNode nd]
+                      (let [w (.getWidth (.getFullBoundsReference nd))]              
+                        (.setOffset nd (- xoffset (.getX nd)) 0.0)
+                        (+ xoffset w)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (.addChild nd n))
+    nd))
+
+(defn ->stack
+  [& nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double yoffset ^PNode nd]
+                      (let [h (.getHeight (.getFullBoundsReference nd))]              
+                        (.setOffset nd 0.0 (- yoffset (.getX nd)))
+                        (+ yoffset h)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (.addChild nd n))
+    nd))
+
+
+(comment
+  (require 'quilsample.core)
+  (defn pswing-example []
+    (let [sw (PSwingCanvas.)
+          lbl (gui/label "Day: ")
+          _   (add-watch quilsample.core/global-time :ticker
+                        (fn [k r old new]
+                         (.setText lbl (str "Day: " new))))
+          _ (doto sw (.setPreferredSize (Dimension. 800 600)))
+          rootlayer  (.getLayer sw)
+          
+          [board dwells states fills chunks lbl :as panels] (mapv ->panel [(quilsample.core/board)
+                                                                       (quilsample.core/dwells)
+                                                                       (quilsample.core/state-trend-widget)
+                                                                       (quilsample.core/fills)
+                                                                       (quilsample.core/chunks)
+                                                                       lbl])]
+      (do (.addChild rootlayer (->stack
+                                (->shelf
+                                 (->stack
+                                  fills
+                                  board
+                                  )
+                                 (->stack states dwells)                                                                         
+                                 chunks
+                                 lbl)
+          )))
+       (gui/toggle-top (gui/display-simple sw))))
+
+;; (defn hud-panel []
+;;   (let [lbl (swing/label "Day: ")
+;;         _   (add-watch global-time :ticker
+;;                        (fn [k r old new]
+;;                          (.setText lbl (str "Day: " new))))
+;;         ]
+;;     (swing/stack
+;;      (swing/shelf
+;;       (swing/stack
+;;        (swing/shelf (dwells  :height 350 :width 350)
+;;                     (state-trend-widget :width 350 :height 350))       
+;;        (swing/shelf (board :width 300 :height 300)
+;;                     (swing/label "          ")
+;;                     (board :width 300 :height 300)                                 
+;;                     ))
+;;       (chunks))
+;;      lbl)))
+
+  ;;implementing our hud in piccolo....trying to squeak out some usability
+
+  ;;The best thing here is to implement everything in piccolo from scratch...
+  ;;We "could" implement a combinator library that draws our shapes in a reified scene...
+  ;;We basically build a new piccolo node every time (not unlike what we're doing now),
+  ;;and create a scene graph ad-hoc.
+  ;;So, our combinators change a little.  Now, we just return a graph of nodes
+  ;;that alter their children....Ah....now I get it.
+  ;;The only difference between this and the ishape methods I use is the existence of
+  ;;graphical bounds and event listeners on each node (built into the PNode superclass).
+  (defn p-hud []
+    (let [init! (fn [pp] ((:painter (.state pp)) (:bg (.state pp))))
+          cnv      (doto (PCanvas.) (.setPreferredSize (Dimension. 600 600)))
+          rootnode (.getLayer cnv)
+          ds       (quilsample.core/dwells :height 350 :width 350)
+          states   (quilsample.core/state-trend-widget :width 350 :height 350)
+          brd      (quilsample.core/board :width 300 :height 300)
+          chnks    (quilsample.core/chunks)
+          bimage   (->image (:buffer @brd ))
+          bimage2  (->image (:buffer @brd ))
+          dsimage  (->image (:buffer @ds))
+          simage   (->image (:buffer @states))
+          cimage   (->image (:buffer @chnks))
+          _ (doseq [c [ds states brd chnks]] (init! c))
+         ; _ (gui/view (:buffer @b))
+          lbl (gui/label "Day: ")
+         _   (add-watch quilsample.core/global-time :ticker
+                        (fn [k r old new]
+                          (do  (.setText lbl (str "Day: " new))
+                               (.repaint cnv))))
+          portrait          ; (shelf
+                            ;  (stack
+                               (shelf dsimage
+                                      simage)       
+                             ;  (shelf bimage                    
+                              ;        bimage2))
+                              
+                             ; cimage)
+          _ (.addChild rootnode portrait)
+          ]          
+      ;(gui/stack
+        cnv
+        ;lbl
+        ))
+  ;)
+    )
 ;;note: we can keep our nodes in a persistent structure, and still have the
 ;;ability to map over them.  They'll mutate their internal state as necessary, but                     
 ;;This is actually pretty performant, there's some garbage being generated
