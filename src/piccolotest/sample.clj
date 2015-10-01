@@ -60,6 +60,74 @@
                       (with-node-meta meta)))
   ([source] (->image source {})))
 
+(defn ->shelf
+  [& nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double xoffset ^PNode nd]
+                      (let [w (.getWidth (.getFullBoundsReference nd))]              
+                        (.setOffset nd (- xoffset (.getX nd)) 0.0)
+                        (+ xoffset w)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (.addChild nd n))
+    nd))
+
+(defn ->stack
+  [& nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double yoffset ^PNode nd]
+                      (let [h (.getHeight (.getFullBoundsReference nd))]              
+                        (.setOffset nd 0.0 (- yoffset (.getX nd)))
+                        (+ yoffset h)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (.addChild nd n))
+    nd))
+
+(defn ->translate [x y nds]
+  (let [x  (double x)
+        y  (double y)
+        nd (proxy [org.piccolo2d.PNode] []
+             (layoutChildren [] 
+               (reduce
+                (fn [acc ^PNode nd] (.translate nd x y))
+                nil
+                (iterator-seq (.getChildrenIterator this)))
+               (proxy-super layoutChildren)))]
+    (doseq [n nds] (.addChild nd n))
+    nd))
+  
+(defn ->scale [xscale yscale nds]
+  (let [xscale  (double xscale)
+        yscale  (double yscale)
+        nd (proxy [org.piccolo2d.PNode] []
+             (layoutChildren [] 
+               (reduce
+                (fn [acc ^PNode nd]           
+                  (.scale nd xscale yscale)))
+                nil
+                (iterator-seq (.getChildrenIterator this))
+               (proxy-super layoutChildren)))]
+    (doseq [n nds] (.addChild nd n))
+    nd))  
+
+(defn ->fade [alpha nds]
+  (let [alpha (float alpha)        
+        nd (proxy [org.piccolo2d.PNode] []
+             (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
+               (do (.pushTransparency ppaint alpha)
+                   (proxy-super fullPaint ppaint)
+                   (.popTransparency ppaint alpha))))]                   
+    (doseq [n nds] (.addChild nd n))
+    nd))  
 
 ;(defn beside [xs])
 ;(defn above  [xs])
@@ -92,25 +160,28 @@
     (.addChild pnl)))
 
 
-;;This works just like our good old fashioned combinators from cljgui
-(defn ^PNode shelf [& components]
-  (let [shelf (SwingLayoutNode. ) ]
-    (doseq [c components] (.addChild shelf c))
-    shelf))
+;; ;;This works just like our good old fashioned combinators from cljgui
+;; (defn ^PNode shelf [& components]
+;;   (let [shelf (SwingLayoutNode. ) ]
+;;     (doseq [c components] (.addChild shelf c))
+;;     shelf))
 
-(defn ^PNode stack [& components]
-  (let [container (JPanel.)
-        box (BoxLayout. container BoxLayout/PAGE_AXIS)
-        _ (.setLayout container box)
-        stack (SwingLayoutNode. container)]
-     (doseq [^PNode c components]
-       ;(.setAlignmentX c Component/CENTER_ALIGNMENT)
-       (.addChild stack 
-            c))
-    stack))
-
+;; (defn ^PNode stack [& components]
+;;   (let [container (JPanel.)
+;;         box (BoxLayout. container BoxLayout/PAGE_AXIS)
+;;         _ (.setLayout container box)
+;;         stack (SwingLayoutNode. container)]
+;;      (doseq [^PNode c components]
+;;        ;(.setAlignmentX c Component/CENTER_ALIGNMENT)
+;;        (.addChild stack 
+;;             c))
+;;      stack))
 
 ;;we'd like to add listeners...
+
+
+;;It'd be nice to have a value set in the table, as well as a mapping of
+;;value->color.  We can have multiple layers too, allowing for imagery.
 
 ;;a table is a layer of cells.
 ;;canvas is a panel, layers are groupings of shapes that confer
@@ -361,37 +432,6 @@
   (reduce (fn [acc s] (do (f s) acc)) l (shapes l)))
 
 
-(defn ->shelf
-  [& nodes]
-  (let [nd 
-        (proxy [org.piccolo2d.PNode] []
-          (layoutChildren [] 
-            (reduce (fn [^double xoffset ^PNode nd]
-                      (let [w (.getWidth (.getFullBoundsReference nd))]              
-                        (.setOffset nd (- xoffset (.getX nd)) 0.0)
-                        (+ xoffset w)))
-                    0.0
-                    (iterator-seq (.getChildrenIterator this)))
-            (proxy-super layoutChildren)))]
-    (doseq [n nodes]
-      (.addChild nd n))
-    nd))
-
-(defn ->stack
-  [& nodes]
-  (let [nd 
-        (proxy [org.piccolo2d.PNode] []
-          (layoutChildren [] 
-            (reduce (fn [^double yoffset ^PNode nd]
-                      (let [h (.getHeight (.getFullBoundsReference nd))]              
-                        (.setOffset nd 0.0 (- yoffset (.getX nd)))
-                        (+ yoffset h)))
-                    0.0
-                    (iterator-seq (.getChildrenIterator this)))
-            (proxy-super layoutChildren)))]
-    (doseq [n nodes]
-      (.addChild nd n))
-    nd))
 
 
 (comment
