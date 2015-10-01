@@ -148,10 +148,12 @@
   ([]   (->layer nil  {})))
 
 
+(defn node? [nd]  (instance? org.piccolo2d.PNode nd))
 (defn ->panel [^JPanel pnl]
-  (doto (PSwing. pnl)
-    ;(.setUseBufferedPainting true)
-    ))
+  (if (node? pnl) pnl
+      (doto (PSwing. pnl)
+                                        ;(.setUseBufferedPainting true)
+        )))
 
 ;;note: a canvas is a panel...
 (defn ->swing-canvas [pnl]
@@ -197,7 +199,9 @@
                            (assoc acc row cols))) {} cell-data)]        
 
        ; background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
-       (->layer (map second  cell-data) {:cells cells})))
+    (->layer (map second  cell-data) {:cells cells})))
+
+;(defn dumb-listener 
 
 (defn ->srm-table [units w h] (->table units 28 60 20))
 (defn cells [t] (:cells (node-meta t)))
@@ -298,6 +302,12 @@
                     (.setOrMask (+ InputEvent/BUTTON1_MASK
                                    InputEvent/BUTTON3_MASK))))                     
 
+(defn ^org.piccolo2d.event.PInputEventListener ->simple-handler [f]
+  (proxy [org.piccolo2d.event.PInputEventListener] []
+    (processEvent [^org.piccolo2d.event.PInputEvent e  type]
+      (let [^int t type]
+        (f e)))))
+
 ;;let's have the handler communicate via channels....                     
 ;;we can add this to the layer.
 (def my-handler 
@@ -319,7 +329,7 @@
           (startDrag [^PInputEvent e]
             (proxy-super startDrag e)
             (.setHandled e true)
-            (. (. e getPickedNode) moveToFront))
+            (. (. e getPickedNode) raiseToTop))
           (drag [^PInputEvent e]
             (proxy-super drag e)
         )
@@ -379,13 +389,13 @@
 ;;How about event layers?
 ;;We already have samplers....
 ;;Can we define an eventdb that lets us see these samples over time?
-(def rcount (atom 0))
+(def rcount
+  (atom 0))
 
 (defn merge-att [^PShape n m]
   (doseq [[k v] m]
     (.addAttribute n (str k) (str v)))
   n)
-
 
                      
 (defn ^PNode ->random-rect [& {:keys [meta]}]
@@ -431,14 +441,15 @@
 (defn do-layer [f l]
   (reduce (fn [acc s] (do (f s) acc)) l (shapes l)))
 
-
+;; (defn ->property-listener [pmap]
+;;   (proxy [
 
 
 (comment
   (require 'quilsample.core)
   (defn pswing-example []
     (let [sw (PSwingCanvas.)
-          lbl (gui/label "Day: ")
+          lbl (gui/label "Day: ") ;(->text "Day:") ;
           _   (add-watch quilsample.core/global-time :ticker
                         (fn [k r old new]
                          (.setText lbl (str "Day: " new))))
