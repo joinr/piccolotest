@@ -428,9 +428,11 @@
 
 (defn layer-bounds [](.getGlobalFullBounds layer1))
 
-(defn center! []
-  (doto (.. my-canvas getCamera)
-    (.animateViewToCenterBounds  (layer-bounds) true 0)))
+(defn center!
+  ([cnv]
+   (doto (.. cnv getCamera)
+     (.animateViewToCenterBounds  (layer-bounds) true 0)))
+  ([] (center! my-canvas)))
 
 ;;we also want to do stuff...
 (defn shapes [^PLayer l]
@@ -453,14 +455,14 @@
           _   (add-watch quilsample.core/global-time :ticker
                         (fn [k r old new]
                          (.setText lbl (str "Day: " new))))
-          _ (doto sw (.setPreferredSize (Dimension. 800 600)))
+          _ (doto sw (.setPreferredSize (Dimension. 600 1000)))
           rootlayer  (.getLayer sw)
           
           [board dwells states fills chunks lbl :as panels] (mapv ->panel [(quilsample.core/board)
                                                                        (quilsample.core/dwells)
                                                                        (quilsample.core/state-trend-widget)
                                                                        (quilsample.core/fills)
-                                                                       (quilsample.core/chunks)
+                                                                       (quilsample.core/chunks 600 800)
                                                                        lbl])]
       (do (.addChild rootlayer (->stack
                                 (->shelf
@@ -471,8 +473,10 @@
                                  (->stack states dwells)                                                                         
                                  chunks
                                  lbl)
-          )))
-       (gui/toggle-top (gui/display-simple sw))))
+                                )))
+      (do 
+        (gui/toggle-top (gui/display-simple sw))
+        (center! sw))))
 
 ;; (defn hud-panel []
 ;;   (let [lbl (swing/label "Day: ")
