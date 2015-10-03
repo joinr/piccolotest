@@ -21,7 +21,7 @@
    [java.awt Color Dimension Graphics2D  GridBagConstraints GridBagLayout BorderLayout FlowLayout 
     GridLayout  Component Insets]
    [java.awt.event   InputEvent MouseEvent]
-   [java.awt.geom   Point2D]
+   [java.awt.geom   Point2D AffineTransform]
    [javax.swing     JFrame JPanel Box BoxLayout] 
    [java.util  ArrayList Random]))
 
@@ -35,6 +35,17 @@
 
 (defn notify!! [msg]
   (>!! node-channel msg))
+
+
+(defn ^PNode translate! [^PNode nd ^double x ^double y]
+  (doto nd (.translate x y)))
+(defn ^PNode scale! [^PNode nd  xscale yscale]
+  (let [xscale  (double xscale)
+        yscale  (double yscale)
+        trans (doto (AffineTransform.)
+                (.scale (double xscale) (double yscale)))]
+       (doto nd (.transformBy trans))))
+;(defn ^PNode scale! [^PNode nd ^double x ^double y] (doto nd (.scale x y)))
 
 (defprotocol MetaNode
   (node-meta [nd])
@@ -54,9 +65,8 @@
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
 
-
 (defn ^PNode ->image
-  ([source meta] (->  (PImage. source)
+  ([source meta] (->  (PImage. (spork.graphics2d.canvas/as-buffered-image source :buffered-image))
                       (with-node-meta meta)))
   ([source] (->image source {})))
 
@@ -92,42 +102,67 @@
       (.addChild nd n))
     nd))
 
-(defn ->translate [x y nds]
+
+(defn ->translate [x y child]
   (let [x  (double x)
         y  (double y)
-        nd (proxy [org.piccolo2d.PNode] []
-             (layoutChildren [] 
-               (reduce
-                (fn [acc ^PNode nd] (.translate nd x y))
-                nil
-                (iterator-seq (.getChildrenIterator this)))
-               (proxy-super layoutChildren)))]
-    (doseq [n nds] (.addChild nd n))
-    nd))
-  
-(defn ->scale [xscale yscale nds]
+        trans (doto (AffineTransform.)
+                    (.translate (double x) (double y)))
+        nd  (doto (PNode.) (.setTransform trans))]
+     (add-child nd child)))
+
+(defn ->scale [xscale yscale child]
   (let [xscale  (double xscale)
         yscale  (double yscale)
-        nd (proxy [org.piccolo2d.PNode] []
-             (layoutChildren [] 
-               (reduce
-                (fn [acc ^PNode nd]           
-                  (.scale nd xscale yscale)))
-                nil
-                (iterator-seq (.getChildrenIterator this))
-               (proxy-super layoutChildren)))]
-    (doseq [n nds] (.addChild nd n))
-    nd))  
+        trans (doto (AffineTransform.)
+                    (.scale (double xscale) (double yscale)))
+        nd  (doto (PNode.)
+              (.setTransform trans))
+        ;; nd (proxy [org.piccolo2d.PNode] []
+        ;;      (layoutChildren [] 
+        ;;        (reduce
+        ;;         (fn [acc ^PNode nd]           
+        ;;           (.scale nd xscale yscale))
+        ;;         nil
+        ;;         (iterator-seq (.getChildrenIterator this)))
+        ;;        (proxy-super layoutChildren)))
+        ]
+    (add-child nd child)))
 
-(defn ->fade [alpha nds]
+(defn ->fade [alpha child]
   (let [alpha (float alpha)        
         nd (proxy [org.piccolo2d.PNode] []
              (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
                (do (.pushTransparency ppaint alpha)
                    (proxy-super fullPaint ppaint)
                    (.popTransparency ppaint alpha))))]                   
-    (doseq [n nds] (.addChild nd n))
-    nd))  
+    (add-child  nd child)))
+
+(defn ->rotate [theta child]
+  (let [theta (double theta)]                   
+    (add-child  (doto (PNode.) (.rotate theta)) child)))
+
+(defn degrees [n] (* n (/ Math/PI 180.0)))
+
+
+(defn ->ctrans [x y nd] (->translate x ( - y) nd))
+
+(defn ->cartesian [height child]
+  (let [nds (if (seq child) (vec child) [child])
+        nd (proxy [org.piccolo2d.PNode] []
+             (layoutChildren [] 
+               (reduce
+                (fn [acc ^PNode nd]
+                  (let [bnds (.getFullBounds nd)]
+                    (translate! nd 1.0
+                                (-   height (.getHeight bnds)))))
+                nil
+                (iterator-seq (.getChildrenIterator this)))
+               (proxy-super layoutChildren)))]
+      (reduce add-child nd nds)))
+;;general transform node.
+(defn ->transform [^java.awt.geom.AffineTransform xform child]
+  (add-child (doto (PNode.) (.setTransform xform)) child))
 
 ;(defn beside [xs])
 ;(defn above  [xs])
@@ -137,6 +172,20 @@
           (* row h) w h {:row row :col col}))
 
 (defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
+(defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
+
+(defprotocol IPiccNode
+  (as-node [nd])
+  (add-child [nd chld]))
+
+(extend-protocol IPiccNode
+  org.piccolo2d.PNode
+  (as-node [nd] nd)
+  (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
+  clojure.lang.PersistentVector
+  (as-node [nd] (reduce add-child (PNode.)  nd))
+  (add-child [nd chld] (conj nd)))
+
 
 ;;so layers can act like groups.  They are also nodes...
 (defn ->layer
@@ -161,6 +210,8 @@
       (PSwingCanvas.)
     (.addChild pnl)))
 
+(defn ->canvas []  (PCanvas.))
+(defn ->layer  []  (PLayer.))
 
 ;; ;;This works just like our good old fashioned combinators from cljgui
 ;; (defn ^PNode shelf [& components]
@@ -417,13 +468,13 @@
 ;;   (
 (def frame (atom nil))
 
-(defn show! []
-  (let [f (gui/toggle-top ;(gui/shelf
-           (gui/display-simple my-canvas))
-    ;    )
-    ]
-    (reset! frame f)
-    f))
+(defn show!
+  ([cnv]
+   (let [f (gui/toggle-top
+            (gui/display-simple cnv))]
+     (reset! frame f)
+     f))
+  ([] (show! my-canvas)))
 ;;rotate all the rects....
 
 (defn layer-bounds [](.getGlobalFullBounds layer1))
@@ -661,6 +712,19 @@
 
 )
 
+;;animate entities...
+(defn render!  [nd & {:keys [transform background handler]}]
+    (let  [cnv (doto (->canvas)
+                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+           layer (.getLayer cnv)
+           _     (when transform (.setTransform layer transform))
+           _     (when background (if (or (node? background)
+                                          (satisfies? IPiccNode background))
+                                    (add-child! layer (as-node nd))
+                                    (.setPaint (.getCamera cnv) background)))]
+      (add-child! layer (as-node nd))
+      (when handler (.addInputEventListener layer handler))
+      (show! cnv)))
 
 (comment
   
