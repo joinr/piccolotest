@@ -36,6 +36,54 @@
 (defn notify!! [msg]
   (>!! node-channel msg))
 
+(defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
+(defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
+
+(defprotocol IPiccNode
+  (as-node [nd])
+  (add-child [nd chld]))
+
+(extend-protocol IPiccNode
+  org.piccolo2d.PNode
+  (as-node [nd] nd)
+  (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
+  org.piccolo2d.PCanvas
+  (as-node [nd] (.getRootNode nd))
+  (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
+  clojure.lang.PersistentVector
+  (as-node [nd] (reduce add-child (PNode.)  nd))
+  (add-child [nd chld] (conj nd)))
+
+
+;;so layers can act like groups.  They are also nodes...
+(defn ->layer
+  ([xs meta]
+   (reduce (fn [^PLayer acc ^PNode n]
+             (doto acc (.addChild n)))
+           (doto (PLayer.) (.addAttribute "meta" meta)) xs))
+  ([xs] (->layer xs   {}))
+  ([]   (->layer nil  {})))
+
+
+(defn node? [nd]  (instance? org.piccolo2d.PNode nd))
+(defn ->panel [^JPanel pnl]
+  (if (node? pnl) pnl
+      (doto (PSwing. pnl)
+                                        ;(.setUseBufferedPainting true)
+        )))
+
+;;note: a canvas is a panel...
+(defn ->swing-canvas [pnl]
+  (doto 
+      (PSwingCanvas.)
+    (.addChild pnl)))
+
+(defn ->canvas
+  ([]  (PCanvas.))
+  ([& nodes] (reduce add-child (PCanvas.) nodes)))
+
+(defn ->layer  []  (PLayer.))
+
 
 (defn ^PNode translate! [^PNode nd ^double x ^double y]
   (doto nd (.translate x y)))
@@ -102,14 +150,16 @@
       (.addChild nd n))
     nd))
 
-
+(def ^:dynamic *cartesian* true)
 (defn ->translate [x y child]
   (let [x  (double x)
-        y  (double y)
+        y  (double (if *cartesian*  (- y) y))
         trans (doto (AffineTransform.)
                     (.translate (double x) (double y)))
         nd  (doto (PNode.) (.setTransform trans))]
      (add-child nd child)))
+
+;(defn ->ctrans [x y nd] (->translate x ( - y) nd))
 
 (defn ->scale [xscale yscale child]
   (let [xscale  (double xscale)
@@ -144,22 +194,20 @@
 
 (defn degrees [n] (* n (/ Math/PI 180.0)))
 
-
-(defn ->ctrans [x y nd] (->translate x ( - y) nd))
-
 (defn ->cartesian [height child]
-  (let [nds (if (seq child) (vec child) [child])
-        nd (proxy [org.piccolo2d.PNode] []
-             (layoutChildren [] 
-               (reduce
-                (fn [acc ^PNode nd]
-                  (let [bnds (.getFullBounds nd)]
-                    (translate! nd 1.0
-                                (-   height (.getHeight bnds)))))
-                nil
-                (iterator-seq (.getChildrenIterator this)))
-               (proxy-super layoutChildren)))]
-      (reduce add-child nd nds)))
+  (binding [*cartesian* true]
+    (let [nds (if (seq child) (vec child) [child])
+          nd (proxy [org.piccolo2d.PNode] []
+               (layoutChildren [] 
+                 (reduce
+                  (fn [acc ^PNode nd]
+                    (let [bnds (.getFullBounds nd)]
+                      (translate! nd 1.0
+                                  (-   height (.getHeight bnds)))))
+                  nil
+                  (iterator-seq (.getChildrenIterator this)))
+                 (proxy-super layoutChildren)))]
+      (reduce add-child nd nds))))
 ;;general transform node.
 (defn ->transform [^java.awt.geom.AffineTransform xform child]
   (add-child (doto (PNode.) (.setTransform xform)) child))
@@ -171,47 +219,7 @@
   (->rect :white (* col w)
           (* row h) w h {:row row :col col}))
 
-(defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
-(defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
-(defprotocol IPiccNode
-  (as-node [nd])
-  (add-child [nd chld]))
-
-(extend-protocol IPiccNode
-  org.piccolo2d.PNode
-  (as-node [nd] nd)
-  (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
-  clojure.lang.PersistentVector
-  (as-node [nd] (reduce add-child (PNode.)  nd))
-  (add-child [nd chld] (conj nd)))
-
-
-;;so layers can act like groups.  They are also nodes...
-(defn ->layer
-  ([xs meta]
-   (reduce (fn [^PLayer acc ^PNode n]
-             (doto acc (.addChild n)))
-           (doto (PLayer.) (.addAttribute "meta" meta)) xs))
-  ([xs] (->layer xs   {}))
-  ([]   (->layer nil  {})))
-
-
-(defn node? [nd]  (instance? org.piccolo2d.PNode nd))
-(defn ->panel [^JPanel pnl]
-  (if (node? pnl) pnl
-      (doto (PSwing. pnl)
-                                        ;(.setUseBufferedPainting true)
-        )))
-
-;;note: a canvas is a panel...
-(defn ->swing-canvas [pnl]
-  (doto 
-      (PSwingCanvas.)
-    (.addChild pnl)))
-
-(defn ->canvas []  (PCanvas.))
-(defn ->layer  []  (PLayer.))
 
 ;; ;;This works just like our good old fashioned combinators from cljgui
 ;; (defn ^PNode shelf [& components]
