@@ -29,6 +29,7 @@
 
 ;;nodes communicate via a node channel
 (def node-channel (chan (a/dropping-buffer 100)))
+(def ^:dynamic *cartesian* true)
 
 (defn notify! [msg]
   (go (a/put! node-channel msg)))
@@ -84,15 +85,36 @@
 
 (defn ->layer  []  (PLayer.))
 
+;;we should redefine this relative to cartesian coords.
+(defn ^PNode translate!
+  [^PNode nd ^double x ^double y]
+   (doto nd (.translate x y)))
 
-(defn ^PNode translate! [^PNode nd ^double x ^double y]
-  (doto nd (.translate x y)))
+;;probably make this something else...
+(defn ^PNode translate
+  [^PNode nd ^double x ^double y]
+   (doto nd (.translate x (- y))))
+
+(defn ^PNode translate-to! [^PNode nd ^double x ^double y]
+  (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y)))
+
+(defn translate-by! [^PNode nd ^double x ^double y ]
+  (let [trans (doto (AffineTransform.)
+                    (.translate (double x) (double (if *cartesian* (- y) y))))]
+    (doto nd (.setTransform trans))))
+
 (defn ^PNode scale! [^PNode nd  xscale yscale]
   (let [xscale  (double xscale)
         yscale  (double yscale)
         trans (doto (AffineTransform.)
                 (.scale (double xscale) (double yscale)))]
-       (doto nd (.transformBy trans))))
+    (doto nd (.transformBy trans))))
+
+(defn ^PNode uncartesian! [^PNode nd]
+  (let [height (.getHeight nd)]
+    (-> nd 
+        (translate! 1.0 height)
+        (scale! 1.0 -1.0))))
 ;(defn ^PNode scale! [^PNode nd ^double x ^double y] (doto nd (.scale x y)))
 
 (defprotocol MetaNode
@@ -113,11 +135,19 @@
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
 
+;;We can annotate text and images to proxy PNode....
+;;Or we we can just accept that we'll always have them flipped upside down.
+;;When we go to render the text, they'll come out fine.  Actually, the
+;;bounds won't be affected for text or images, so...picking shouldn't be affected.
+;;We can just pre-scale the images and text to be flipped.
+;;As long as they have no children, we should be alright.
 (defn ^PNode ->image
   ([source meta] (->  (PImage. (spork.graphics2d.canvas/as-buffered-image source :buffered-image))
-                      (with-node-meta meta)))
+                      (with-node-meta meta)
+                      (uncartesian!)))
   ([source] (->image source {})))
 
+;;rewrite using our node transforms.
 (defn ->shelf
   [& nodes]
   (let [nd 
@@ -134,14 +164,16 @@
       (.addChild nd n))
     nd))
 
+;;rewrite using our node transforms.
 (defn ->stack
   [& nodes]
   (let [nd 
         (proxy [org.piccolo2d.PNode] []
           (layoutChildren [] 
             (reduce (fn [^double yoffset ^PNode nd]
-                      (let [h (.getHeight (.getFullBoundsReference nd))]              
-                        (.setOffset nd 0.0 (- yoffset (.getX nd)))
+                      (let [bnds (.getFullBoundsReference nd)
+                            h (.getHeight bnds )]              
+                        (.setOffset nd 0.0 (+ yoffset h))
                         (+ yoffset h)))
                     0.0
                     (iterator-seq (.getChildrenIterator this)))
@@ -150,10 +182,9 @@
       (.addChild nd n))
     nd))
 
-(def ^:dynamic *cartesian* true)
 (defn ->translate [x y child]
   (let [x  (double x)
-        y  (double (if *cartesian*  (- y) y))
+        y  y ;(double (if *cartesian*  (- y) y))
         trans (doto (AffineTransform.)
                     (.translate (double x) (double y)))
         nd  (doto (PNode.) (.setTransform trans))]
@@ -194,20 +225,30 @@
 
 (defn degrees [n] (* n (/ Math/PI 180.0)))
 
+;;We really only apply the transformation once.
+;;Any further translations that come through should be mirrored similarly.
+;;Note:  It's not just a translation, it's also a scaling operation.
+;;So, what we're doing is offseting the node by -y.
+;;I think it's enough to just introduce a transform
 (defn ->cartesian [height child]
   (binding [*cartesian* true]
-    (let [nds (if (seq child) (vec child) [child])
-          nd (proxy [org.piccolo2d.PNode] []
-               (layoutChildren [] 
-                 (reduce
-                  (fn [acc ^PNode nd]
-                    (let [bnds (.getFullBounds nd)]
-                      (translate! nd 1.0
-                                  (-   height (.getHeight bnds)))))
-                  nil
-                  (iterator-seq (.getChildrenIterator this)))
-                 (proxy-super layoutChildren)))]
-      (reduce add-child nd nds))))
+    ;; (let [nds (if (seq child) (vec child) [child])
+    ;;       nd (proxy [org.piccolo2d.PNode] []
+    ;;            (layoutChildren [] 
+    ;;              (reduce
+    ;;               (fn [acc ^PNode nd]
+    ;;                 (let [bnds (.getFullBounds nd)]
+    ;;                   (translate! nd 0.0 ;;this is concatenating.  We're doing a matrix multiply every time.
+    ;;                                  (- height (.getHeight bnds)))))
+    ;;               nil
+    ;;               (iterator-seq (.getChildrenIterator this)))
+    ;;              (proxy-super layoutChildren)))]
+    (let [origin (-> (PNode.)                                      
+                   (translate-by! 0.0 (- height))
+                   (scale! 1.0 -1.0))]
+      (add-child origin child))))
+
+          
 ;;general transform node.
 (defn ->transform [^java.awt.geom.AffineTransform xform child]
   (add-child (doto (PNode.) (.setTransform xform)) child))
@@ -327,10 +368,11 @@
 
 ;;In this sense, the piccolo scenegraph is no different from
 ;;the existing hud (it's not being interacted with the user).
-(defn ^PPath ->ellipse [x y w  h]  (PPath/createEllipse x y  w  h))
-(defn ^PPath ->line    [x y x2 y2] (PPath/createLine    x y  x2 y2))
-(defn ^PNode ->text    [^String txt] (PText. txt))
+(defn ^PPath ->ellipse [x y w   h]    (PPath/createEllipse x y w  h))
+(defn ^PPath ->line    [x y x2  y2]   (PPath/createLine    x y x2 y2))
+(defn ^PNode ->text    [^String txt]  (uncartesian!       (PText. txt)))
 
+         
 ;;like the grapheditor example, we have a layer for nodes and a
 ;;layer for edges.
 
@@ -476,10 +518,15 @@
 ;;   (
 (def frame (atom nil))
 
+(defn canvas? [x] (instance? org.piccolo2d.PCanvas x))
+
 (defn show!
   ([cnv]
    (let [f (gui/toggle-top
-            (gui/display-simple cnv))]
+            (gui/display-simple
+             (if  (canvas? cnv) cnv
+                  (doto (->canvas cnv)
+                    (.setPreferredSize (java.awt.Dimension. 600 600))))))]
      (reset! frame f)
      f))
   ([] (show! my-canvas)))
