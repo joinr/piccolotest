@@ -1,6 +1,7 @@
 (ns piccolotest.sample
   (:require [spork.cljgui.components.swing :as gui]
             [spork.graphics2d.canvas :as canvas]
+            [spork.geometry.shapes :as shapes]
             [spork.graphics2d.swing :as swing]
             [clojure.core.async :as a
              :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]])
@@ -84,15 +85,13 @@
   ([xs] (->layer xs   {}))
   ([]   (->layer nil  {})))
 
-  
-
 (defn node? [nd]  (instance? org.piccolo2d.PNode nd))
 (defn ->panel [^JPanel pnl]
   (if (node? pnl) pnl
       (doto (PSwing. pnl)
                                         ;(.setUseBufferedPainting true)
         )))
-
+   
 ;;note: a canvas is a panel...
 (defn ->swing-canvas [pnl]
   (doto 
@@ -167,6 +166,27 @@
                       (uncartesian!)))
   ([source] (->image source {})))
 
+
+;;given a shapestack...
+;;we can get a sketching surface that's compatible as both a
+;;PNode and something we can sketch onto without retaining
+;;info (perfect for our trails layer).
+(defn ->sketch
+  ([w h] (let [ss  (shapes/->rec [] w h)
+               buf (:buffer ss)
+               my-image (proxy [PImage spork.graphics2d.canvas.IShapeStack spork.graphics2d.canvas.IWipeable]
+                            [(canvas/as-buffered-image buf :buffered-image)]                          
+                          (push_shape [shp] (do (canvas/push-shape buf shp)
+                                                (proxy-super invalidatePaint)
+                                                this))
+                          (pop_shape  []    this)
+                          (wipe [] (canvas/wipe ss) this))                                         
+               ]
+           my-image)))
+           ;; (-> ;(->image buf)
+           ;;     ;(uncartesian!) ;because we're already cartesianed in the buffer via spork/sketch.
+           ;;     ))))
+       
 ;;rewrite using our node transforms.
 (defn ->shelf
   [& nodes]
