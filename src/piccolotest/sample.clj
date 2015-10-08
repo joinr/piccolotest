@@ -52,9 +52,16 @@
   org.piccolo2d.PCanvas
   (as-node [nd]        (.getRootNode nd))
   (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
+  org.piccolo2d.extras.pswing.PSwingCanvas
+  (as-node [nd]        (.getRootNode nd))
+  (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
   clojure.lang.PersistentVector
   (as-node [nd]        (reduce add-child (PNode.)  nd))
-  (add-child [nd chld] (conj nd)))
+  (add-child [nd chld] (conj nd))
+  javax.swing.JPanel
+  (as-node [nd]   (PSwing. nd))
+  (add-child [nd child] (add-child (PSwing. nd) child)))
+                      
 
 (defn ->cache [child]
   (let [c (PNodeCache.)
@@ -94,9 +101,7 @@
    
 ;;note: a canvas is a panel...
 (defn ->swing-canvas [pnl]
-  (doto 
-      (PSwingCanvas.)
-    (.addChild pnl)))
+    (add-child (PSwingCanvas.) pnl))
 
 (defn ->canvas
   ([]  (PCanvas.))
@@ -172,20 +177,17 @@
 ;;PNode and something we can sketch onto without retaining
 ;;info (perfect for our trails layer).
 (defn ->sketch
-  ([w h] (let [ss  (shapes/->rec [] w h)
-               buf (:buffer ss)
-               my-image (proxy [PImage spork.graphics2d.canvas.IShapeStack spork.graphics2d.canvas.IWipeable]
-                            [(canvas/as-buffered-image buf :buffered-image)]                          
-                          (push_shape [shp] (do (canvas/push-shape buf shp)
-                                                (proxy-super invalidatePaint)
-                                                this))
-                          (pop_shape  []    this)
-                          (wipe [] (canvas/wipe ss) this))                                         
-               ]
+  ([w h] (->sketch [] w h))
+  ([shps w h] (let [ss  (shapes/->rec shps w h)
+                    buf (:buffer ss)
+                    my-image (proxy [PImage spork.graphics2d.canvas.IShapeStack spork.graphics2d.canvas.IWipeable]
+                                 [(canvas/as-buffered-image buf :buffered-image)]                          
+                               (push_shape [shp] (do (canvas/push-shape buf shp)
+                                                     (proxy-super invalidatePaint)
+                                                     this))
+                               (pop_shape  []    this)
+                               (wipe [] (canvas/wipe ss) this))]
            my-image)))
-           ;; (-> ;(->image buf)
-           ;;     ;(uncartesian!) ;because we're already cartesianed in the buffer via spork/sketch.
-           ;;     ))))
        
 ;;rewrite using our node transforms.
 (defn ->shelf
@@ -292,9 +294,6 @@
 ;;general transform node.
 (defn ->transform [^java.awt.geom.AffineTransform xform child]
   (add-child (doto (PNode.) (.setTransform xform)) child))
-
-;(defn beside [xs])
-;(defn above  [xs])
     
 (defn ->cell [row col w h]
   (->rect :white (* col w)
@@ -567,8 +566,6 @@
 (defn ^PNode rotate [^PNode n ^double deg]
   (doto n (.rotate deg)))
 
-;; (defn rotate-rects! []
-;;   (
 (def frame (atom nil))
 
 (defn canvas? [x] (instance? org.piccolo2d.PCanvas x))
@@ -584,8 +581,8 @@
      (reset! frame f)
      f))
   ([] (show! my-canvas)))
-;;rotate all the rects....
 
+;;rotate all the rects....
 (defn layer-bounds
   ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
 
@@ -611,12 +608,12 @@
 (comment
   (require 'quilsample.core)
   (defn pswing-example []
-    (let [sw (PSwingCanvas.)
+    (let [sw  (PSwingCanvas.)
           lbl (gui/label "Day: ") ;(->text "Day:") ;
           _   (add-watch quilsample.core/global-time :ticker
                         (fn [k r old new]
                          (.setText lbl (str "Day: " new))))
-          _ (doto sw (.setPreferredSize (Dimension. 600 1000)))
+          _   (doto sw (.setPreferredSize (Dimension. 600 1000)))
           rootlayer  (.getLayer sw)
           
           [board dwells states fills chunks lbl :as panels] (mapv ->panel [(quilsample.core/board)
