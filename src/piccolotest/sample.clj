@@ -17,7 +17,7 @@
    [org.piccolo2d.extras.pswing PSwing PSwingCanvas ]
    [org.piccolo2d.extras.swing SwingLayoutNode]
    [org.piccolo2d.extras.swing.SwingLayoutNode.Anchor]
-
+   [org.piccolo2d.extras.nodes PNodeCache]
    [java.awt Color Dimension Graphics2D  GridBagConstraints GridBagLayout BorderLayout FlowLayout 
     GridLayout  Component Insets]
    [java.awt.event   InputEvent MouseEvent]
@@ -49,13 +49,32 @@
   (as-node [nd] nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
-  (as-node [nd] (.getRootNode nd))
+  (as-node [nd]        (.getRootNode nd))
   (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
   clojure.lang.PersistentVector
-  (as-node [nd] (reduce add-child (PNode.)  nd))
+  (as-node [nd]        (reduce add-child (PNode.)  nd))
   (add-child [nd chld] (conj nd)))
 
+(defn ->cache [child]
+  (let [c (PNodeCache.)
+        ]
+    (add-child c child)))
 
+(defn ^PNode set-paint! [^PNode nd clr]
+  (doto nd
+    (.setPaint ^java.awt.Color (swing/get-gui-color clr))))
+(defn ^PNode invalidate! [^PNode nd]
+  (doto nd
+    (.invalidatePaint)))
+
+(comment 
+(dotimes [i 1000]
+  (let [[c r] [(rand-int 28) (rand-int 60)]]
+    (-> (get-cell tbl r c)
+        (set-paint! (rand-nth [:red :blue :orange :yellow :green]) )
+        (invalidate!))
+    (Thread/sleep 16)))
+)
 ;;so layers can act like groups.  They are also nodes...
 (defn ->layer
   ([xs meta]
@@ -65,6 +84,7 @@
   ([xs] (->layer xs   {}))
   ([]   (->layer nil  {})))
 
+  
 
 (defn node? [nd]  (instance? org.piccolo2d.PNode nd))
 (defn ->panel [^JPanel pnl]
@@ -83,7 +103,7 @@
   ([]  (PCanvas.))
   ([& nodes] (reduce add-child (PCanvas.) nodes)))
 
-(defn ->layer  []  (PLayer.))
+;(defn ->layer  []  (PLayer.))
 
 ;;we should redefine this relative to cartesian coords.
 (defn ^PNode translate!
@@ -297,15 +317,28 @@
                          (let [rw (get acc row {})
                                cols (assoc rw coll c)]
                            (assoc acc row cols))) {} cell-data)]        
-
        ; background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
-    (->layer (map second  cell-data) {:cells cells})))
+    ;(->cache
+     (->layer  (map second  cell-data) {:cells cells})))
+  ;)
 
 ;(defn dumb-listener 
 
-(defn ->srm-table [units w h] (->table units 28 60 20))
+(defn ->srm-table [units qtrs] (->table units qtrs 60 20))
 (defn cells [t] (:cells (node-meta t)))
 (defn get-cell [t row col] (get (get (cells t) row) col))
+(defn clear-cells! [t]
+  (reduce-kv (fn [acc _ xs]
+               (reduce-kv 
+                (fn [acc _ ^PNode nd]
+                  (do (.removeAllChildren nd)
+                      (set-paint! nd :white)
+                      acc))
+                acc
+                xs))
+             t
+             (cells t)))
+
 ;;we'd like to listen to individual cells too...
 
 
@@ -524,6 +557,7 @@
   ([cnv]
    (let [f (gui/toggle-top
             (gui/display-simple
+            ;org.piccolo2d.extras.PFrame. "Canvas" false
              (if  (canvas? cnv) cnv
                   (doto (->canvas cnv)
                     (.setPreferredSize (java.awt.Dimension. 600 600))))))]
@@ -532,12 +566,13 @@
   ([] (show! my-canvas)))
 ;;rotate all the rects....
 
-(defn layer-bounds [](.getGlobalFullBounds layer1))
+(defn layer-bounds
+  ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
 
 (defn center!
   ([cnv]
    (doto (.. cnv getCamera)
-     (.animateViewToCenterBounds  (layer-bounds) true 0)))
+     (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
   ([] (center! my-canvas)))
 
 ;;we also want to do stuff...
