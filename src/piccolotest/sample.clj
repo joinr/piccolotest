@@ -169,9 +169,19 @@
      (doto
        (PPath/createRectangle (double x) (double y) (double w) (double h))
        (.setPaint (swing/get-gui-color color)))
+     (with-node-meta met
+       (PPath/createRectangle (double x) (double y) (double w) (double h))
+       (.setPaint (swing/get-gui-color color)))
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
 
+;;images are shape stacks, so we can draw onto them.
+(extend-type org.piccolo2d.nodes.PImage
+  spork.graphics2d.canvas/IShapeStack
+  (push-shape [obj shp] (canvas/push-shape (.getImage obj) shp))
+  (pop-shape [obj] obj)
+  spork.graphics2d.canvas/IWipeable
+  (wipe [obj] (canvas/wipe (.getImage obj))))
 ;;We can annotate text and images to proxy PNode....
 ;;Or we we can just accept that we'll always have them flipped upside down.
 ;;When we go to render the text, they'll come out fine.  Actually, the
