@@ -45,9 +45,21 @@
   (as-node [nd])
   (add-child [nd chld]))
 
+;; (defn as-node [obj]
+;;   (let [cls (class obj)]
+;;     (cond (extends? IPiccNode cls)      (as-node- obj)
+;;           (extends? canvas/IShape cls)  (as-node- ( obj)
+    
+;;we should interface with the shapes protocol to allow them to be nodes.
+;;they could either be custom nodes or images...
+;;still determining a better way to do this.
+;;Best way is to enforce shapes to have a more primitive shared interface for
+;;custom pnodes, or at least able to be interpreted as pnodes.
+;;Actually "best" way is to implement scene graph directly :(
+
 (extend-protocol IPiccNode
   org.piccolo2d.PNode
-  (as-node [nd] nd)
+  (as-node   [nd] nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
   (as-node [nd]        (.getRootNode nd))
@@ -134,10 +146,11 @@
                 (.scale (double xscale) (double yscale)))]
     (doto nd (.transformBy trans))))
 
+;;I think we want this to be 0.0 for the x coordinate, not 1.0....
 (defn ^PNode uncartesian! [^PNode nd]
   (let [height (.getHeight nd)]
     (-> nd 
-        (translate! 1.0 height)
+        (translate! 0.0 height) ;altered from 1.0
         (scale! 1.0 -1.0))))
 ;(defn ^PNode scale! [^PNode nd ^double x ^double y] (doto nd (.scale x y)))
 
@@ -178,15 +191,15 @@
 ;;info (perfect for our trails layer).
 (defn ->sketch
   ([w h] (->sketch [] w h))
-  ([shps w h] (let [ss  (shapes/->rec shps w h)
-                    buf (:buffer ss)
+  ([shps w h] (let [ss       (shapes/->rec shps w h)
+                    buf      (:buffer ss)
                     my-image (proxy [PImage spork.graphics2d.canvas.IShapeStack spork.graphics2d.canvas.IWipeable]
                                  [(canvas/as-buffered-image buf :buffered-image)]                          
                                (push_shape [shp] (do (canvas/push-shape buf shp)
                                                      (proxy-super invalidatePaint)
                                                      this))
-                               (pop_shape  []    this)
-                               (wipe [] (canvas/wipe ss) this))]
+                               (pop_shape  []     this)
+                               (wipe       [] (canvas/wipe ss) this))]
            my-image)))
        
 ;;rewrite using our node transforms.
