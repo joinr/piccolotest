@@ -41,6 +41,33 @@
 (defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
 (defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
+;;the problem we're currently having is extending node-like functionality
+;;to things defined earlier, namely things that extend the
+;;spork.graphics2d.canvas.IShape protocol.
+
+;;We can go the route that clojure goes with the ISeq protocol, having a
+;;member function - seq - that we can use to initialize anything to a compatible
+;;node.  The only thing is, we want to transitively say that "any" shape can
+;;be viewed as a node....yet shapes are identified via the protocol.  Multimethods are
+;;a (somewhat slow) option; we can just modify the function used to identify the method
+;;dispatch, and from there, we go grow the implementations (i.e. the implementation is
+;;"open").
+
+;;Note:  we won't be creating "lots" of nodes, so the slowness of multimethods may not
+;;be a big deal here (unlike other areas).
+;;Another option is to use a factory function that delegates to a multimethod to create a
+;;wrapped IPiccNode class (along with a dereffable object).  Clojure does this with the seq
+;;function (seq is a constructor that makes - or wraps - things into an object that is compatible
+;;or provides a seq'd view of the underlying thing.
+;;as-node should probably be like this.
+
+;;We also w
+
+;;Another option is to explicitly extend as-node to shapes, or - more generally - to
+;;have a single function that detects if the underlying obj extends IPiccNode, and then
+;;delegates to as-node-, or if it's a shape (and only for shapes), creates a new node
+;;from that.  For instance, I'd like to just shove a "shape" into a node and have it exist in
+;;the hierarchy.  This makes things easier to compose.
 (defprotocol IPiccNode
   (as-node [nd])
   (add-child [nd chld]))
@@ -167,9 +194,6 @@
   ([color x y w h meta]
    (->
      (doto
-       (PPath/createRectangle (double x) (double y) (double w) (double h))
-       (.setPaint (swing/get-gui-color color)))
-     (with-node-meta met
        (PPath/createRectangle (double x) (double y) (double w) (double h))
        (.setPaint (swing/get-gui-color color)))
      (with-node-meta meta)))
