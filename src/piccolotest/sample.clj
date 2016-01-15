@@ -72,6 +72,13 @@
   (as-node [nd])
   (add-child [nd chld]))
 
+;;We're currently not covering intersection in the spork shape library.
+;;To make custom nodes, which have accurate picking, we'd have to do that.
+;;If we don't care about picking, or we're okay with simply bounding boxes,
+;;then using the existing simplistic bounding boxes works fine.  Otherwise,
+;;we go into caching intersections and such (not necessarily difficult with
+;;immutable, reified objects, but not exactly desirable either).
+
 ;; (defn as-node [obj]
 ;;   (let [cls (class obj)]
 ;;     (cond (extends? IPiccNode cls)      (as-node- obj)
@@ -89,11 +96,11 @@
   (as-node   [nd] nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
-  (as-node [nd]        (.getRootNode nd))
+  (as-node [nd]        (.getRootNode ^PCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
   org.piccolo2d.extras.pswing.PSwingCanvas
-  (as-node [nd]        (.getRootNode nd))
-  (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
+  (as-node [nd]        (.getRootNode ^PSwingCanvas nd))
+  (add-child [nd chld] (do (.addChild (.getLayer ^PSwingCanvas nd) (as-node chld)) nd))
   clojure.lang.PersistentVector
   (as-node [nd]        (reduce add-child (PNode.)  nd))
   (add-child [nd chld] (conj nd))
@@ -213,7 +220,7 @@
 ;;We can just pre-scale the images and text to be flipped.
 ;;As long as they have no children, we should be alright.
 (defn ^PNode ->image
-  ([source meta] (->  (PImage. (spork.graphics2d.canvas/as-buffered-image source :buffered-image))
+  ([source meta] (->  (PImage. ^java.awt.Image (spork.graphics2d.canvas/as-buffered-image source :buffered-image))
                       (with-node-meta meta)
                       (uncartesian!)))
   ([source] (->image source {})))
@@ -228,7 +235,7 @@
   ([shps w h] (let [ss       (shapes/->rec shps w h)
                     buf      (:buffer ss)
                     my-image (proxy [PImage spork.graphics2d.canvas.IShapeStack spork.graphics2d.canvas.IWipeable]
-                                 [(canvas/as-buffered-image buf :buffered-image)]                          
+                                 [^java.awt.Image (canvas/as-buffered-image buf :buffered-image)]                          
                                (push_shape [shp] (do (canvas/push-shape buf shp)
                                                      (proxy-super invalidatePaint)
                                                      this))
