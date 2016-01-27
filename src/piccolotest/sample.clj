@@ -15,10 +15,10 @@
     PSelectionEventHandler
     PNotification
     PNotificationCenter]
-   [org.piccolo2d.extras.pswing PSwing PSwingCanvas ]
+   [org.piccolo2d.extras.pswing PSwing PSwingCanvas]
    [org.piccolo2d.extras.swing SwingLayoutNode]
    [org.piccolo2d.extras.swing.SwingLayoutNode.Anchor]
-   [org.piccolo2d.extras.nodes PNodeCache]
+   [org.piccolo2d.extras.nodes PNodeCache PLine]
    [java.awt Color Dimension Graphics2D  GridBagConstraints GridBagLayout BorderLayout FlowLayout 
     GridLayout  Component Insets]
    [java.awt.event   InputEvent MouseEvent]
@@ -110,7 +110,7 @@
   javax.swing.JComponent
   (as-node [nd]   (PSwing. nd))
   (add-child [nd child] (add-child (PSwing. nd) child)))
-                      
+                    
 
 (defn ->cache [child]
   (let [c (PNodeCache.)
@@ -154,7 +154,7 @@
    (add-child (PSwingCanvas.) pnl))
   ([] (PSwingCanvas.)))
 
-(defn ->canvas
+(defn ^PCanvas ->canvas
   ([]  (PCanvas.))
   ([& nodes] (reduce add-child (PCanvas.) nodes)))
 
@@ -173,7 +173,7 @@
 (defn ^PNode translate-to! [^PNode nd ^double x ^double y]
   (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y)))
 
-(defn translate-by! [^PNode nd ^double x ^double y ]
+(defn ^PNode translate-by! [^PNode nd ^double x ^double y ]
   (let [trans (doto (AffineTransform.)
                     (.translate (double x) (double (if *cartesian* (- y) y))))]
     (doto nd (.setTransform trans))))
@@ -211,6 +211,23 @@
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
 
+(defn ^PNode ->line
+  ([color x y x2 y2 meta]
+   (->
+     (doto
+       (PPath/createLine (double x) (double y) (double x2) (double y2))
+       (.setPaint (swing/get-gui-color color)))
+     (with-node-meta meta)))
+  ([color x y x2 y2] (->line color x y x2 y2 {})))
+
+(defn ^PNode ->circle
+  ([color x y w h meta]
+   (->  (doto
+          (PPath/createEllipse (double x) (double y) (double w) (double h))
+          (.setPaint (swing/get-gui-color color)))
+        (with-node-meta meta)))
+  ([color x y w h] (->circle color x y w h {})))
+
 ;;images are shape stacks, so we can draw onto them.
 (extend-type org.piccolo2d.nodes.PImage
   spork.graphics2d.canvas/IShapeStack
@@ -235,7 +252,7 @@
 ;;we can get a sketching surface that's compatible as both a
 ;;PNode and something we can sketch onto without retaining
 ;;info (perfect for our trails layer).
-(defn ->sketch
+(defn ^PImage ->sketch
   ([w h] (->sketch [] w h))
   ([shps w h] (let [ss       (shapes/->rec shps w h)
                     buf      (:buffer ss)
@@ -249,7 +266,7 @@
            my-image)))
        
 ;;rewrite using our node transforms.
-(defn ->shelf
+(defn ^PNode ->shelf
   [& nodes]
   (let [nd 
         (proxy [org.piccolo2d.PNode] []
@@ -266,7 +283,7 @@
     nd))
 
 ;;rewrite using our node transforms.
-(defn ->stack
+(defn ^PNode ->stack
   [& nodes]
   (let [nd 
         (proxy [org.piccolo2d.PNode] []
@@ -283,7 +300,7 @@
       (add-child nd n))
     nd))
 
-(defn ->translate [x y child]
+(defn ^PNode ->translate [x y child]
   (let [x  (double x)
         y  y ;(double (if *cartesian*  (- y) y))
         trans (doto (AffineTransform.)
@@ -293,7 +310,7 @@
 
 ;(defn ->ctrans [x y nd] (->translate x ( - y) nd))
 
-(defn ->scale [xscale yscale child]
+(defn ^PNode ->scale [xscale yscale child]
   (let [xscale  (double xscale)
         yscale  (double yscale)
         trans (doto (AffineTransform.)
@@ -311,7 +328,7 @@
         ]
     (add-child nd child)))
 
-(defn ->fade [alpha child]
+(defn ^PNode ->fade [alpha child]
   (let [alpha (float alpha)        
         nd (proxy [org.piccolo2d.PNode] []
              (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
@@ -320,7 +337,7 @@
                    (.popTransparency ppaint alpha))))]                   
     (add-child  nd child)))
 
-(defn ->rotate [theta child]
+(defn ^PNode ->rotate [theta child]
   (let [theta (double theta)]                   
     (add-child  (doto (PNode.) (.rotate theta)) child)))
 
@@ -331,7 +348,7 @@
 ;;Note:  It's not just a translation, it's also a scaling operation.
 ;;So, what we're doing is offseting the node by -y.
 ;;I think it's enough to just introduce a transform
-(defn ->cartesian [height child]
+(defn ^PNode ->cartesian [height child]
   (binding [*cartesian* true]
     ;; (let [nds (if (seq child) (vec child) [child])
     ;;       nd (proxy [org.piccolo2d.PNode] []
@@ -351,10 +368,22 @@
 
           
 ;;general transform node.
-(defn ->transform [^java.awt.geom.AffineTransform xform child]
+(defn ^PNode ->transform [^java.awt.geom.AffineTransform xform child]
   (add-child (doto (PNode.) (.setTransform xform)) child))
-    
-(defn ->cell [row col w h]
+
+
+;; (extend-protocol IPiccNode
+;;   spork.cljgui.components.PaintPanel
+;;   (as-node [obj]
+;;     (let [nd (->cartesian  (:height @obj) (->image (:buffer @obj)))]
+;;       (do (when-let [repaint! (get (meta obj) :repaint!)]
+;;             (let [_ (add-watch repaint! :node-paint
+;;                                (fn [n k old new]
+;;                                  (.paint nd)))]))
+;;           nd)))
+;;     (add-child [obj nd] (add-child (as-node obj) nd)))  
+
+(defn ^PNode ->cell [row col w h]
   (->rect :white (* col w)
           (* row h) w h {:row row :col col}))
 
@@ -386,7 +415,7 @@
 ;;a table is a layer of cells.
 ;;canvas is a panel, layers are groupings of shapes that confer
 ;;and respond to events with eachother.
-(defn ->table [rows cols w h]
+(defn ^PLayer ->table [rows cols w h]
   (let [cell-data   (into []
                       (for [row (range rows)
                             col (range cols)]
