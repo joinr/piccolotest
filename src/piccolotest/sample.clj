@@ -96,7 +96,7 @@
   (as-node   [nd] nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
-  (as-node [nd]        (.getRootNode ^PCanvas nd))
+  (as-node   [nd]        (.getRoot ^PCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
   org.piccolo2d.extras.pswing.PSwingCanvas
   (as-node [nd]        (.getRootNode ^PSwingCanvas nd))
@@ -105,6 +105,9 @@
   (as-node [nd]        (reduce add-child (PNode.)  nd))
   (add-child [nd chld] (conj nd))
   javax.swing.JPanel
+  (as-node [nd]   (PSwing. nd))
+  (add-child [nd child] (add-child (PSwing. nd) child))
+  javax.swing.JComponent
   (as-node [nd]   (PSwing. nd))
   (add-child [nd child] (add-child (PSwing. nd) child)))
                       
@@ -133,7 +136,7 @@
 (defn ->layer
   ([xs meta]
    (reduce (fn [^PLayer acc ^PNode n]
-             (doto acc (.addChild n)))
+             (doto acc (add-child n)))
            (doto (PLayer.) (.addAttribute "meta" meta)) xs))
   ([xs] (->layer xs   {}))
   ([]   (->layer nil  {})))
@@ -146,8 +149,10 @@
         )))
    
 ;;note: a canvas is a panel...
-(defn ->swing-canvas [pnl]
-    (add-child (PSwingCanvas.) pnl))
+(defn ^PSwingCanvas ->swing-canvas
+  ([pnl]
+   (add-child (PSwingCanvas.) pnl))
+  ([] (PSwingCanvas.)))
 
 (defn ->canvas
   ([]  (PCanvas.))
@@ -257,7 +262,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (.addChild nd n))
+      (add-child nd n))
     nd))
 
 ;;rewrite using our node transforms.
@@ -275,7 +280,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (.addChild nd n))
+      (add-child nd n))
     nd))
 
 (defn ->translate [x y child]
