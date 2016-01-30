@@ -3,6 +3,7 @@
             [spork.graphics2d.canvas :as canvas]
             [spork.geometry.shapes :as shapes]
             [spork.graphics2d.swing :as swing]
+            [spork.graphics2d.font :as font]
             [clojure.core.async :as a
              :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]])
   (:import
@@ -21,6 +22,7 @@
    [org.piccolo2d.extras.nodes PNodeCache PLine]
    [java.awt Color Dimension Graphics2D  GridBagConstraints GridBagLayout BorderLayout FlowLayout 
     GridLayout  Component Insets]
+   [java.awt Paint]
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D AffineTransform]
    [javax.swing     JFrame JPanel Box BoxLayout] 
@@ -120,6 +122,15 @@
 (defn ^PNode set-paint! [^PNode nd clr]
   (doto nd
     (.setPaint ^java.awt.Color (swing/get-gui-color clr))))
+
+(defn ^PNode set-text-paint! [^PText nd clr]
+  (doto nd
+    (.setTextPaint ^java.awt.Color (swing/get-gui-color clr))))
+
+(defn ^PNode set-font! [^PText nd fnt]
+  (doto nd
+    (.setFont (font/get-font fnt))))
+
 (defn ^PNode invalidate! [^PNode nd]
   (doto nd
     (.invalidatePaint)))
@@ -165,6 +176,12 @@
   [^PNode nd ^double x ^double y]
    (doto nd (.translate x y)))
 
+
+(defn ^PNode transform!
+  [^PNode nd ^AffineTransform xform]
+  (doto nd (.setTransform xform)))
+
+
 ;;probably make this something else...
 (defn ^PNode translate
   [^PNode nd ^double x ^double y]
@@ -184,6 +201,10 @@
         trans (doto (AffineTransform.)
                 (.scale (double xscale) (double yscale)))]
     (doto nd (.transformBy trans))))
+
+(defn ^PPath stroke! [^PPath nd ^java.awt.Stroke s]
+  (doto nd
+    (.setStroke s)))
 
 ;;I think we want this to be 0.0 for the x coordinate, not 1.0....
 (defn ^PNode uncartesian! [^PNode nd]
