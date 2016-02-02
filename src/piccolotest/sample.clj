@@ -529,8 +529,8 @@
 
 ;;In this sense, the piccolo scenegraph is no different from
 ;;the existing hud (it's not being interacted with the user).
-(defn ^PPath ->ellipse [x y w   h]    (PPath/createEllipse x y w  h))
-(defn ^PPath ->line    [x y x2  y2]   (PPath/createLine    x y x2 y2))
+(defn ^PPath ->ellipse [^double x ^double y ^double w ^double h]    (PPath/createEllipse x y w  h))
+;(defn ^PPath ->line    [x y x2  y2]   (PPath/createLine    x y x2 y2))
 (defn ^PNode ->text    [^String txt]  (uncartesian!       (PText. txt)))
 
          
