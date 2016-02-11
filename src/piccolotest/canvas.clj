@@ -1,7 +1,8 @@
 ;;implementation of a spork graphics2d canvas that
 ;;"draws" a nodes to a scenegraph.
 (ns piccolotest.canvas
-  (:require [spork.graphics2d.canvas :as canvas]
+  (:require [spork.graphics2d [canvas :as canvas]
+                              [debug :as debug]]
             [clojure.zip :as zip]
             [piccolotest.sample :as p])
   (:import [java.awt.Graphics2D]
@@ -29,8 +30,6 @@
                                (not (seen-end? loc)))
                              (iterate zip/next tr))))))
 
-
-
 ;;the goal is to convert instructions to nodes.
 ;;A flat set of nodes, with no real structure can be
 ;;immediately converted into the appropriate lines and such.
@@ -42,11 +41,23 @@
                          ;_   (println res)
                          ]
                      res)))
+
+(def ^:dynamic *stroke* nil)
+(defn ^PNode try-stroke! [nd]
+  (if-let [s *stroke*]
+    (p/stroke! nd s)
+    nd))
+
+(defmethod nodify :default [nd]
+  (cond (map? nd)  (mapv nodify (:children nd))
+      ;  (vector? nd) (mapv nodify nd)
+        :else (throw (Exception. (str [:unknown-node nd])))))
+        
 (defmethod nodify :pnode [x]
   x)
 (defmethod nodify :line   [[_ clr x y x2 y2]]
   (-> (p/->line clr x y x2 y2)
-;      (p/set-paint! clr)
+      (try-stroke!)
       ;(p/transform!  xform)
       ))
 
@@ -54,7 +65,7 @@
   (-> (p/->text s)
      ; (p/set-paint! clr)
       (p/set-font! font)
-      (p/translate! x y)
+      (p/translate! x (- y))
 ;      (p/transform!  xform)
       ))
 (defmethod nodify :image  [[_  img transparency x y]]
@@ -68,7 +79,19 @@
 ;      (p/translate! x y)
       ;(p/transform!  xform)
       ))
+;;temporary
+(defmethod nodify :fill-rectangle  [[_  color x y w h]]
+  (-> (p/->rect color x y w h)
+;      (p/translate! x y)
+      ;(p/transform!  xform)
+      ))
 (defmethod nodify :ellipse    [[_  color x y w h]]
+  (-> (p/->circle color x y w h)
+;      (p/translate! x y)
+      ;(p/transform!  xform)
+      ))
+;;temporary
+(defmethod nodify :fill-ellipse    [[_  color x y w h]]
   (-> (p/->circle color x y w h)
 ;      (p/translate! x y)
       ;(p/transform!  xform)
@@ -102,14 +125,35 @@
 (defmethod nodify :begin [{:keys [node children]}]
   (mapv nodify children))
 
+
 ;;this could be a one-time operation, like setting the paint,
 ;;we just traverse all the children and set their strokes.
 ;;not sure how to handle this atm.
 (defmethod nodify :stroke [{:keys [node children]}]
-  (mapv nodify children) ;passthrough for now
-  )
+  (let [[_ s] node]
+    (binding [*stroke* s]
+      (mapv nodify children)) ;passthrough for now     
+     ))
 
-(comment 
+(comment
+  (defn splot []
+    (spork.sketch/->plot (spork.geometry.shapes/->rectangle :red 0 0 10 10)
+                         :cached false
+                         :title  "Blah" ;title
+                         :xlabel "x" ;xlabel
+                         :ylabel "y" ;ylabel
+                         :title-font  (spork.graphics2d.font/->font "ARIAL" [:bold] 20)
+                         :ylabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
+                         :xlabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
+                         :xmin 0 
+                         :xmax 600
+                         :ymin 0
+                         :ymax 600
+                         :plotxscale 1.0
+                         :plotyscale 1.0
+                         :h 600
+                         :w 600
+                         ))
 ;;testing
 (defn
   simple-plt []
@@ -123,7 +167,7 @@
 
 (def  plt   (simple-plt))
 (def  plter (quilsample.plots/get-plotter :area plt))
-(def  cnv   (p/->cartesian 600 (nodify (spork.sketch/shape->nodes (:plot plt)))))
+(def  cnv   (p/->cartesian 600 (nodify (debug/shape->nodes (:plot plt)))))
 (def  data  (atom (spork.trends/trends-from [:a  :green
                                              :b :blue])))
 (defn push-slice [x]
@@ -171,8 +215,42 @@
 
 (comment 
 
-;;a render queue...
-(deftype PiccGraphics [^Graphics2D g  width  height root]
+;;we could just implement this guy directly and voila..
+;;we get piccgraphics...
+;;The difference is that we're "drawing" to a pnode (or a PLayer).
+;;it'd be nice to define a scene, however....where we can
+;;save the metadata (specficially the ids of the shapes) 
+;;and make it accessible to queries. 
+
+;;We "could" provide an escape hatch that allows the canvas
+;;to determine how to draw shapes, rather than allowing the
+;;shape to direct the canvas using the canvas api.
+
+;;perhaps we have a draw-scene api...
+;;shapes can - currently - be seen as scene-graphs
+;;by rendering their nodes as per nodify.  
+
+;;However, we have more information in a scene, typically
+;;in the form of metadata (via id), that allows us to have  
+;;knowledge of specific shapes in the scene.  For example,
+;;if we want to identify the plot-area of a scene, we can   
+;;add shapes to the plot-area later on if it's named.
+;;That provides a simple idiom upon which to plot points
+;;and such...
+  
+;;If we introduce an intermediate layer between drawing
+;;and specifying (like the old scene-graph did), then 
+;;we can get back our intermediate representation (nodes)
+;;and parse them into appropriate structures.
+
+;;For instance, parsing a scene as a piccolo scene graph 
+;;would be much easier, specifically if we store the
+;;mapping of nodes to piccolo nodes for reference.  
+;;Like a hosted scene.  note, the IR could be
+;;cached and optimized as well, i.e. factoring out   
+;;extraneous translations and such.
+  
+(deftype PiccGraphics [^PLayer g  width  height]
   ICanvas2D
   (get-context    [cg]  cg)
   (set-context    [cg ctx] (throw (Exception. "not implemented")))  
@@ -203,10 +281,10 @@
     (swap! instructions conj [:image img transparency x y (get-transform cg)])
     cg)
   IStroked
-   (get-stroke [cg] (.getStroke g))
-   (set-stroke [cg  s] (do (.setStroke g ^Stroke s)
-                           (swap! instructions conj [:stroke s]))
-     cg)
+  (get-stroke [cg] (.getStroke g))
+  (set-stroke [cg  s] (do (.setStroke g ^Stroke s)
+                          (swap! instructions conj [:stroke s]))
+    cg)
   ITextRenderer
   (text-width     [cg txt] (f/string-width (.getFont g) txt))
   (text-height    [cg txt] (f/string-height (.getFont g)  txt))

@@ -237,7 +237,7 @@
    (->
      (doto
        (PPath/createLine (double x) (double y) (double x2) (double y2))
-       (.setPaint (swing/get-gui-color color)))
+       (.setStrokePaint (swing/get-gui-color color)))
      (with-node-meta meta)))
   ([color x y x2 y2] (->line color x y x2 y2 {})))
 
