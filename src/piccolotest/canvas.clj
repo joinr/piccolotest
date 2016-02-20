@@ -161,6 +161,7 @@
                )))
 
 (comment
+  (require 'quilsample.plots)
   (defn splot []
     (spork.sketch/->plot (spork.geometry.shapes/->rectangle :red 0 0 10 10)
                          :cached false
@@ -206,6 +207,14 @@
   (if (< x l) l
       (if (> x r) r
           x)))
+
+(def plotarea-node (p/find-node :plotarea cnv))
+
+;;finally figured it out.  We have to call repaint on the canvas if we want our
+;;images to update as well.  Otherwise, they don't get redrawn.
+;;Should look into providing clip information for the dynamic plots, since they're
+;;really only creating local changes to the graphics.  We don't have to redraw the
+;;image every time.  Although, right now, it's not hurting anything.
 (let [x (atom 0)
       a (atom (rand-int 600))
       b (atom (rand-int 600))]
@@ -217,7 +226,8 @@
       (swap! b (fn [n]
                  (clamp 0 600 (+ n ( - (rand-int 200) 100))))) 
       (push-slice [[:a @x @a] [:b @x @b]])
-      (plter @data))))
+      (plter @data)
+      (.invalidatePaint ^PNode plotarea-node)))
 
 )
 ;; (defn segments->sexp [xs]

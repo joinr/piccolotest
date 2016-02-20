@@ -701,21 +701,27 @@
   (doto n (.rotate deg)))
 
 (def frame (atom nil))
+(def canvas (atom nil))
 
 (defn canvas? [x] (instance? org.piccolo2d.PCanvas x))
 
 (defn show!
   ([cnv]
-   (let [f (gui/toggle-top
+   (let [c (if  (canvas? cnv) cnv
+                (doto (->canvas cnv)
+                  (.setPreferredSize (java.awt.Dimension. 600 600))))
+         _ (reset! canvas c)
+         f (gui/toggle-top
             (gui/display-simple
             ;org.piccolo2d.extras.PFrame. "Canvas" false
-             (if  (canvas? cnv) cnv
-                  (doto (->canvas cnv)
-                    (.setPreferredSize (java.awt.Dimension. 600 600))))))]
+             c))]
      (reset! frame f)
      f))
   ([] (show! my-canvas)))
 
+(defn get-canvas! []
+  (when-let [f @frame]
+    (.getContentPane f)))
 ;;rotate all the rects....
 (defn layer-bounds
   ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
