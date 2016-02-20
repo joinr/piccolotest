@@ -30,6 +30,8 @@
                                (not (seen-end? loc)))
                              (iterate zip/next tr))))))
 
+(def ^:dynamic *topology* nil)
+
 ;;the goal is to convert instructions to nodes.
 ;;A flat set of nodes, with no real structure can be
 ;;immediately converted into the appropriate lines and such.
@@ -48,92 +50,115 @@
     (p/stroke! nd s)
     nd))
 
+(defmacro register! [nd & body]
+  `(if-let [m# (:properties (meta ~nd))]
+     (p/with-node-meta (p/as-node ~@body) m#)
+     ~@body))
+
 (defmethod nodify :default [nd]
-  (cond (map? nd)  (mapv nodify (:children nd))
+  (register! nd
+             (cond (map? nd)  (mapv nodify (:children nd))
       ;  (vector? nd) (mapv nodify nd)
-        :else (throw (Exception. (str [:unknown-node nd])))))
+             :else (throw (Exception. (str [:unknown-node nd]))))))
         
 (defmethod nodify :pnode [x]
   x)
-(defmethod nodify :line   [[_ clr x y x2 y2]]
-  (-> (p/->line clr x y x2 y2)
-      (try-stroke!)
-      ;(p/transform!  xform)
-      ))
+(defmethod nodify :line   [[_ clr x y x2 y2 :as nd]]
+  (register! nd
+             (-> (p/->line clr x y x2 y2)
+                 (try-stroke!)
+                                        ;(p/transform!  xform)
+                 )))
 
-(defmethod nodify :string [[_ clr font s x y]]
-  (-> (p/->text s)
-     ; (p/set-paint! clr)
-      (p/set-font! font)
-      (p/translate! x (- y))
-;      (p/transform!  xform)
-      ))
-(defmethod nodify :image  [[_  img transparency x y]]
-  (-> (p/->image img)
-      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
+(defmethod nodify :string [[_ clr font s x y :as nd]]
+  (register! nd
+             (-> (p/->text s)
+                                        ; (p/set-paint! clr)
+                 (p/set-font! font)
+                 (p/translate! x (- y))
+                                        ;      (p/transform!  xform)
+      )))
+(defmethod nodify :image  [[_  img transparency x y :as nd]]
+  (register! nd
+             (-> (p/->image img)
+                 (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
 
-(defmethod nodify :rectangle  [[_  color x y w h]]
-  (-> (p/->rect color x y w h)
-;      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
+(defmethod nodify :rectangle  [[_  color x y w h :as nd]]
+  (register! nd
+             (-> (p/->rect color x y w h)
+                                        ;      (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
 ;;temporary
-(defmethod nodify :fill-rectangle  [[_  color x y w h]]
-  (-> (p/->rect color x y w h)
-;      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
-(defmethod nodify :ellipse    [[_  color x y w h]]
-  (-> (p/->circle color x y w h)
-;      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
+(defmethod nodify :fill-rectangle  [[_  color x y w h :as nd]]
+  (register! nd
+             (-> (p/->rect color x y w h)
+                                        ;      (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
+
+(defmethod nodify :ellipse    [[_  color x y w h :as nd]]
+  (register! nd
+             (-> (p/->circle color x y w h)
+                                        ;      (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
 ;;temporary
-(defmethod nodify :fill-ellipse    [[_  color x y w h]]
-  (-> (p/->circle color x y w h)
-;      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
-(defmethod nodify :circle    [[_  color x y w h]]
-  (-> (p/->circle color x y w h)
-;      (p/translate! x y)
-      ;(p/transform!  xform)
-      ))
+(defmethod nodify :fill-ellipse    [[_  color x y w h :as nd]]
+  (register! nd
+             (-> (p/->circle color x y w h)
+                                        ;      (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
 
-(defmethod nodify :translate [{:keys [node children]}]
-  (let [[_ x y] node]
-    (p/->translate x y (mapv nodify children))))
+(defmethod nodify :circle    [[_  color x y w h :as nd]]
+  (register! nd
+             (-> (p/->circle color x y w h)
+                                        ;      (p/translate! x y)
+                                        ;(p/transform!  xform)
+                 )))
 
-(defmethod nodify :rotate [{:keys [node children]}]
-  (let [[_ theta] node]
-    (p/->rotate theta (mapv nodify children))))
+(defmethod nodify :translate [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ x y] node]
+               (p/->translate x y (mapv nodify children)))))
+  
+(defmethod nodify :rotate [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ theta] node]
+               (p/->rotate theta (mapv nodify children)))))
+  
+(defmethod nodify :scale [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ xscale yscale] node]
+               (p/->scale xscale yscale (mapv nodify children)))))
+  
+(defmethod nodify :fade [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ alpha] node]
+               (p/->fade alpha (mapv nodify children)))))
 
-(defmethod nodify :scale [{:keys [node children]}]
-  (let [[_ xscale yscale] node]
-    (p/->scale xscale yscale (mapv nodify children))))
+(defmethod nodify :alpha [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ alpha] node]
+               (p/->fade alpha (mapv nodify children)))))
 
-(defmethod nodify :fade [{:keys [node children]}]
-  (let [[_ alpha] node]
-    (p/->fade alpha (mapv nodify children))))
-
-(defmethod nodify :alpha [{:keys [node children]}]
-  (let [[_ alpha] node]
-    (p/->fade alpha (mapv nodify children))))
-
-(defmethod nodify :begin [{:keys [node children]}]
-  (mapv nodify children))
+(defmethod nodify :begin [{:keys [node children] :as nd}]
+  (register! nd
+             (mapv nodify children)))
 
 
 ;;this could be a one-time operation, like setting the paint,
 ;;we just traverse all the children and set their strokes.
 ;;not sure how to handle this atm.
-(defmethod nodify :stroke [{:keys [node children]}]
-  (let [[_ s] node]
-    (binding [*stroke* s]
-      (mapv nodify children)) ;passthrough for now     
-     ))
+(defmethod nodify :stroke [{:keys [node children] :as nd}]
+  (register! nd
+             (let [[_ s] node]
+               (binding [*stroke* s]
+                 (mapv nodify children)) ;passthrough for now     
+               )))
 
 (comment
   (defn splot []
@@ -172,7 +197,9 @@
                                              :b :blue])))
 (defn push-slice [x]
   (let [nxt  (spork.trends/add-slice @data x)
-        _ (reset! data nxt)]
+        _ (reset! data nxt)
+        ;_ (.invalidatePaint
+           ]
     nxt))
 
 (defn clamp [l r x]

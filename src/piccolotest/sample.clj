@@ -223,6 +223,31 @@
   (node-meta [obj]         (.getAttribute obj "meta"))
   (with-node-meta [obj m]  (.addAttribute obj "meta" m) obj))
 
+(defn node-children [^PNode nd]
+  (iterator-seq (.getChildrenIterator nd)))
+
+;;Search through the node meta data for ids
+(defn find-node [id ^PNode root]
+  (let [m (or (node-meta root) nil)]
+    (if (= (get m :id) id) root
+        (reduce (fn [acc nd]
+                  (if (find-node id nd)
+                    (reduced nd)
+                    acc)) nil
+                    (node-children root)))))
+
+(defn node-seq [^PNode root]
+  (tree-seq (fn [nd] (pos? (.getChildrenCount ^PNode nd)) )
+            node-children root))
+    
+
+(defn node-map [^PNode nd]
+  (into {}
+        (filter (fn [[l r]]
+                  l)
+                (for [nd (node-seq nd)]
+                  [(node-meta nd) nd]))))
+
 (defn ^PNode ->rect
   ([color x y w h meta]
    (->
