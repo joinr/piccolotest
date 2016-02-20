@@ -971,6 +971,7 @@
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer handler))
+      (center! cnv)
       (show! cnv)))
 
 (comment

@@ -161,6 +161,7 @@
                )))
 
 (comment
+  ;;this works great now...
   (require 'quilsample.plots)
   (defn splot []
     (spork.sketch/->plot (spork.geometry.shapes/->rectangle :red 0 0 10 10)
@@ -180,6 +181,9 @@
                          :h 600
                          :w 600
                          ))
+  
+;;Lets build up a coordinated plot..
+;;We'll have multiple plots working together.
 ;;testing
 (defn
   simple-plt []
