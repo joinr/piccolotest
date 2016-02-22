@@ -328,6 +328,24 @@
       (add-child nd n))
     nd))
 
+;;like shelf, except it aligns children by
+;;their midpoint of the vertical bounds as well.
+;; (defn ^PNode ->mid-shelf
+;;   [& nodes]
+;;   (let [nd       
+;;         (proxy [org.piccolo2d.PNode] []
+;;           (layoutChildren []
+;;             (reduce (fn [^double xoffset ^PNode nd]
+;;                       (let [w (.getWidth (.getFullBoundsReference nd))]              
+;;                         (.setOffset nd (- xoffset (.getX nd)) 0.0)
+;;                         (+ xoffset w)))
+;;                     0.0
+;;                     (iterator-seq (.getChildrenIterator this)))
+;;             (proxy-super layoutChildren)))]
+;;     (doseq [n nodes]
+;;       (add-child nd n))
+;;     nd))
+
 ;;rewrite using our node transforms.
 (defn ^PNode ->stack
   [& nodes]

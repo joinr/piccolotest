@@ -231,7 +231,7 @@
                  (clamp 0 600 (+ n ( - (rand-int 200) 100))))) 
       (push-slice [[:a @x @a] [:b @x @b]])
       (plter @data)
-      (.invalidatePaint ^PNode plotarea-node)))
+      (.invalidatePaint ^PNode plotarea-node))))
 
 )
 ;; (defn segments->sexp [xs]

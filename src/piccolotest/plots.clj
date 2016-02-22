@@ -122,6 +122,49 @@
              )
    :get-color get-color}))
 
+(defn center [l r]
+  (let [bounds (.getFullBounds r)]
+    [(p/translate (/ (.getWidth bounds) 2.0) 0.0
+                  l)
+     r]))
+(defn ->legend [series & {:keys [direction] :or {direction :vertical}}]
+  (if (= direction :vertical)
+    (apply p/->stack
+           (for [[nm clr] (partition 2 series)]
+             (let [txt (p/->text (str nm))
+                   bounds (.getFullBounds txt)]          
+               [(p/->rect clr 0 0 10 (.getHeight bounds))
+                (p/->translate  10 0 txt)
+                ])))
+    (apply p/->shelf
+           (for [[nm clr] (partition 2 series)]
+             (let [txt    (p/->text (str nm))
+                   bounds (.getFullBounds txt)]          
+               [(p/->rect clr (/ (.getWidth bounds) 4.0) 0 (/ (.getWidth bounds) 4.0) 10)
+                (p/->translate  0 10 txt)
+                ]
+                )))
+    ))
+;;this is a little hack to get our nodes lines up for the chart.
+;;Note: we could institute alignment in the stack and shelf functions......
+(defn middle-right [l r]
+  (let [bnds (.getFullBounds l)
+        h    (.getHeight bnds)
+        mid  (/ h 2.0)
+        left (.getX bnds)
+        right (+ (.getX bnds) (.getWidth bnds))]    
+    (let [bnds  (.getFullBounds r)
+          xr    (.getX          bnds)
+          hr    (.getHeight  bnds)
+          ]
+      [l
+       (p/->translate  (- right xr)
+                       (-        mid hr)
+                      r)])))
+    
+    
+     
+     
 ;;should be a drop-in replacement for dynamic-plot.
 ;;If we wanted to, we could place these in a separate
 ;;frame wrapped in a pcanvas, and have them interact
@@ -144,8 +187,11 @@
                              :xmax (or xmax width)
                              :ymax (or ymax height))
         plter (get-plotter plot-type plt)
-        cnv   (p/->cartesian height (canvas/nodify (debug/shape->nodes (sketch/tag {:id name :class :plot-node}
-                                                                                   (:plot plt)))))
+        lgnd  (->legend series)
+        cnv   (p/->cartesian height (middle-right
+                                     (canvas/nodify (debug/shape->nodes (sketch/tag {:id name :class :plot-node}
+                                                                                    (:plot plt))))
+                                     lgnd))
                                         ;this only matters for dynamic area plots.
         ^org.piccolo2d.PNode plotarea (p/find-node :plotarea cnv)
         
@@ -243,7 +289,11 @@
 
 (defn n-plots [n & {:keys [plot-type] :or {plot-type :area}}]
   (let [
-        the-plots (map (fn [idx] (plot-node plot-type :name (str "plot_" idx))) (range n))
+        the-plots (map (fn [idx] (plot-node (rand-nth [:area :dot])
+                                            :name (str "plot_" idx) 
+                                            :series [:a (rand-nth [:red :green :blue])                                                     
+                                                     :b (rand-nth [:orange :yellow :purple])]))
+                       (range n))
         _ (doseq [p the-plots] (plot-randomly! p))
         c (apply p/->stack the-plots)]
     (p/render! c)
