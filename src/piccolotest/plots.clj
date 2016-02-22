@@ -176,7 +176,7 @@
         name (or title "the plot")        
         plt  (->dynamic-plot :title    title
                              :xlabel   (or xlabel "x")
-                             :ylabel   (or xlabel "y")
+                             :ylabel   (or ylabel "y")
                              :height    height
                              :width     width
                              :get-color get-color

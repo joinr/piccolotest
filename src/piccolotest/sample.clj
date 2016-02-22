@@ -126,6 +126,10 @@
 (defn ^PNode set-text-paint! [^PText nd clr]
   (doto nd
     (.setTextPaint ^java.awt.Color (swing/get-gui-color clr))))
+(defn ^PText set-text! [^PText nd ^String txt]
+  (doto nd
+    (.setText txt)
+    ))
 
 (defn ^PNode set-font! [^PText nd fnt]
   (doto nd
@@ -412,8 +416,9 @@
 ;;Note:  It's not just a translation, it's also a scaling operation.
 ;;So, what we're doing is offseting the node by -y.
 ;;I think it's enough to just introduce a transform
-(defn ^PNode ->cartesian [height child]
-  (binding [*cartesian* true]
+(defn ^PNode ->cartesian
+  ([height child]
+   (binding [*cartesian* true]
     ;; (let [nds (if (seq child) (vec child) [child])
     ;;       nd (proxy [org.piccolo2d.PNode] []
     ;;            (layoutChildren [] 
@@ -429,6 +434,8 @@
                    (translate-by! 0.0 (- height))
                    (scale! 1.0 -1.0))]
       (add-child origin child))))
+  ([^PNode child]
+   (->cartesian (.getHeight (.getFullBounds child)) child)))
 
           
 ;;general transform node.
