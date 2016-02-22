@@ -161,9 +161,6 @@
        (p/->translate  (- right xr)
                        (-        mid hr)
                       r)])))
-    
-    
-     
      
 ;;should be a drop-in replacement for dynamic-plot.
 ;;If we wanted to, we could place these in a separate
@@ -171,19 +168,19 @@
 ;;with swing without incident (I think).
 ;;Width and height define the viewable width and height, not necessarily the
 ;;dataset.  xmax and ymax define that..
-(defn plot-node [plot-type & {:keys [name width height series get-color xmax ymax xlabel ylabel sliced]
+(defn plot-node [plot-type & {:keys [title width height series get-color xmax ymax xlabel ylabel sliced]
                  :or {width 600 height 600 series [:a  :green
                                                    :b  :blue]}}]
   (let [get-color (if-let [gc get-color] gc  (apply hash-map series))
         sliced (or sliced (= plot-type :area))
-        name (or name "the plot")        
-        plt  (->dynamic-plot :title    name
+        name (or title "the plot")        
+        plt  (->dynamic-plot :title    title
                              :xlabel   (or xlabel "x")
                              :ylabel   (or xlabel "y")
                              :height    height
                              :width     width
                              :get-color get-color
-                             :name "blah"
+                             :name name
                              :xmax (or xmax width)
                              :ymax (or ymax height))
         plter (get-plotter plot-type plt)
