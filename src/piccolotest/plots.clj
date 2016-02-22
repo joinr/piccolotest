@@ -3,12 +3,53 @@
 ;;as images.  Images aren't cutting it atm.
 (ns piccolotest.plots
   (:require [piccolotest.sample :as p]
+            [spork.geometry.shapes :refer :all]
+            [spork.graphics2d [debug :as debug] [image :as image]]
             [spork [sketch :as sketch] [trends :as trends] ]
-            [spork.graphics2d.debug :as debug]
+            [spork.util.general]
             [piccolotest.canvas :as canvas]))
+;;Note: I'm currently using the plot specifications from
+;;spork.sketch, and rendering them into scenes using
+;;piccolotest.scene/nodify.  In the future, I will
+;;port the plot and scale definitions from spork
+;;into pure scene representations.
+;;For now, we reuse them.
 
-(comment
+;;This is loosely shaping up into something akin to Grammar
+;;of Graphics, albeit designed with an emphasis on realtime
+;;i.e. animated plotting first.  For now, we'll stick with
+;;the narrow specification for the plots that we have on hand.
+;;Later, I'll work on fleshing it out into things like
+;;facets and friends.  Note: we can implement the
+;;facet functionality pretty easily using existing
+;;clojure functions.
 
+;;__Marks__
+;;Marks - these would be geoms in GG
+;;Copied from quilsample.shared to eliminate dep.
+(def colored-ring (spork.util.general/memo-1
+                   (fn [clr]
+                     (spork.graphics2d.image/shape->img
+                      :translucent (->ring clr 0 0 10 10)))))
+
+(def colored-point (spork.util.general/memo-1
+                    (fn [clr]
+                      (spork.graphics2d.image/shape->img
+                       :translucent (->circle clr 0 0 10 10)))))
+
+(def colored-square
+  (spork.util.general/memo-1
+   (fn [clr]
+     (spork.graphics2d.image/shape->img
+      :translucent (->rectangle clr 0 0 10 10)))))
+
+(def colored-pixel (spork.util.general/memo-1
+                    (fn [clr]
+                      (spork.graphics2d.image/shape->img
+                       :translucent (->rectangle clr 0 0 5 5)))))
+
+(defn ->colored-ring [clr x y]  (sketch/translate x y (colored-pixel clr)))
+  
 ;;__Independent Plots__
 ;;Trying to break out stuff that's functionally independent.
 ;;It'd be nice to have a high-level api for composing charts and data streams.
@@ -33,13 +74,13 @@
 
 (defn ->dot [tr get-color]
   (sketch/fade 0.3
-    (shared/colored-point
+    (colored-point
      (if-let [clr (get-color tr)] clr :black))))
 
 (defmulti get-plotter (fn [plot-type plot] plot-type))
 (defmethod get-plotter :dot [plot-type {:keys [canvas xscale yscale get-color]}]
   (fn [[tr u v]]
-    (canvas/push-shape canvas
+    (spork.graphics2d.canvas/push-shape canvas
         (sketch/uv->xy xscale yscale u v
              (->dot tr get-color)))))
   
@@ -47,12 +88,11 @@
   (let [yinv (/ 1.0 yscale)]
     (fn [ts]
       (let [u  (:x @ts)]
-        (canvas/push-shape canvas
+        (spork.graphics2d.canvas/push-shape canvas
             (sketch/uv->xy xscale yscale u 0.0  ;draws a vertical trend line at x 
                 (sketch/scale 1.0 yinv
                         ts)))))))
 
-;;Oh...plots are just sketches...
 (defn ->dynamic-plot [& {:keys [title xlabel ylabel
                                 height width name xscale yscale xmin xmax ymin ymax get-color]
                          :or {xmin 0.0 ymin 0.0}}]
@@ -82,33 +122,47 @@
              )
    :get-color get-color}))
 
-)
-
-;;bad dependency on quilsample.plots
-(defn simple-plt [& {:keys [width height series get-color]
+;;should be a drop-in replacement for dynamic-plot.
+;;If we wanted to, we could place these in a separate
+;;frame wrapped in a pcanvas, and have them interact
+;;with swing without incident (I think).
+;;Width and height define the viewable width and height, not necessarily the
+;;dataset.  xmax and ymax define that..
+(defn plot-node [plot-type & {:keys [name width height series get-color xmax ymax xlabel ylabel sliced]
                  :or {width 600 height 600 series [:a  :green
-                                                   :b  :blue]}
-                 get-color (fn [_] :red)}]
-  (let [plt   (quilsample.plots/->dynamic-plot :title "the plot"
-                                               :xlabel "x"
-                                               :ylabel "y"
-                                               :height height
-                                               :width width
-                                               :get-color get-color
-                                               :name "blah" :xmax width :ymax height)
-        plter (quilsample.plots/get-plotter :area plt)
-        cnv   (p/->cartesian height (canvas/nodify (debug/shape->nodes (:plot plt))))
-        data  (atom (spork.trends/trends-from series))
-        push-slice (fn push-slice [x]
-                     (let [nxt  (spork.trends/add-slice @data x)
-                           _    (reset! data nxt)                   
-                           ]
-                       nxt))
-        ^org.piccolo2d.PNode plotarea-node (p/find-node :plotarea cnv)
-        add-sample (fn add-sample! [x]
-                     (push-slice x)
-                     (plter @data)
-                     (.invalidatePaint plotarea-node))]        
+                                                   :b  :blue]}}]
+  (let [get-color (if-let [gc get-color] gc  (apply hash-map series))
+        sliced (or sliced (= plot-type :area))
+        name (or name "the plot")        
+        plt  (->dynamic-plot :title    name
+                             :xlabel   (or xlabel "x")
+                             :ylabel   (or xlabel "y")
+                             :height    height
+                             :width     width
+                             :get-color get-color
+                             :name "blah"
+                             :xmax (or xmax width)
+                             :ymax (or ymax height))
+        plter (get-plotter plot-type plt)
+        cnv   (p/->cartesian height (canvas/nodify (debug/shape->nodes (sketch/tag {:id name :class :plot-node}
+                                                                                   (:plot plt)))))
+                                        ;this only matters for dynamic area plots.
+        ^org.piccolo2d.PNode plotarea (p/find-node :plotarea cnv)
+        
+        data       (when sliced (atom (spork.trends/trends-from series)))
+        push-slice (when sliced
+                     (fn push-slice [x]
+                       (let [nxt  (spork.trends/add-slice @data x)
+                             _    (reset! data nxt)                   
+                             ]
+                         nxt)))                       
+        add-sample (if sliced (fn add-sample! [x]
+                                (push-slice x)
+                                (plter @data)
+                                (.invalidatePaint plotarea))
+                       (fn add-sample! [x]
+                         (plter x)
+                         (.invalidatePaint plotarea)))]        
     (p/with-node-meta cnv      
       (merge (p/node-meta cnv)
              plt
@@ -116,19 +170,23 @@
               :data    data
               :push-slice push-slice
               :add-sample add-sample
-              :plotarea-node plotarea-node
+              :plotarea   plotarea
               :series series
               :width width
               :height height
-             }))))
+              :plot-type plot-type
+              :sliced sliced}))))
+
+;;this is just for testing..
 
 (defn clamp [l r x]
   (if (< x l) l
       (if (> x r) r
           x)))
 
+;;This is incompatible with dots...
 (defn random-slices [series & {:keys [xmax ymax]}]
-  (let [_ (println series)
+  (let [
         labels (mapv first (partition 2 series))
         x      (atom 0)
         series-values (zipmap labels (repeatedly (fn [] (atom (rand ymax)))))
@@ -165,20 +223,27 @@
                                    
 
 (defn plot-randomly! [plt]
-  (let [{:keys [series width height xscale yscale add-sample plotarea-node]} (p/node-meta plt)
+  (let [{:keys [series width height xscale yscale add-sample plotarea-node plot-type sliced]} (p/node-meta plt)
         next-slice! (random-slices series :xmax (* width xscale) :ymax (* height xscale))
-        paint-state (object-array [plt nil])
-        _ (println :plotting paint-state)]
+        paint-state (object-array [plt nil])                      
+        _ (println :plotting paint-state)
+        out *out*
+        add-samples (if sliced (fn add-sliced-sample [] (add-sample (next-slice!)))
+                        (fn add-samples [] (binding [*out* out]
+                                             (doseq [x  (next-slice!)]
+                                               (add-sample x)))))
+                                 ]
     (do ;(swap! repaint-list conj paint-state)
-        (future (while @alive
-                  (when @plotting
-                    (do (add-sample (next-slice!))
-                        (aset paint-state 1 true)))
-                  (Thread/sleep 16))))))
+      (future (while @alive
+                (when @plotting
+                  (do (add-samples) 
+                      (aset paint-state 1 true)))
+                (Thread/sleep 16)))
+      )))
 
-(defn n-plots [n]
+(defn n-plots [n & {:keys [plot-type] :or {plot-type :area}}]
   (let [
-        the-plots (take n (repeatedly (fn [] (simple-plt))))
+        the-plots (map (fn [idx] (plot-node plot-type :name (str "plot_" idx))) (range n))
         _ (doseq [p the-plots] (plot-randomly! p))
         c (apply p/->stack the-plots)]
     (p/render! c)
