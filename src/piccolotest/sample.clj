@@ -459,20 +459,27 @@
 (defn ^PNode ->fade [alpha child]
   (let [alpha  (if (atom? alpha) alpha  (float alpha))
         push-tp (if (atom? alpha)
-                  (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                  (fn [^org.piccolo2d.util.PPaintContext ppaint]                    
                     (.pushTransparency ppaint (float @alpha)))
                   (fn [^org.piccolo2d.util.PPaintContext ppaint]
                     (.pushTransparency ppaint ^float alpha)))
         pop-tp (if (atom? alpha)
-                 (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                 (fn [^org.piccolo2d.util.PPaintContext ppaint]                   
                    (.popTransparency ppaint (float @alpha)))
                  (fn [^org.piccolo2d.util.PPaintContext ppaint]
                    (.popTransparency ppaint ^float alpha)))
-        nd (proxy [org.piccolo2d.PNode] []
-             (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
-               (do (push-tp ppaint)
-                   (proxy-super fullPaint ppaint)
-                   (pop-tp ppaint))))
+        nd (if (atom? alpha)
+             (proxy [org.piccolo2d.PNode] []
+               (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
+                 (when (>= @alpha 0)
+                   (do (push-tp ppaint)
+                       (proxy-super fullPaint ppaint)
+                       (pop-tp ppaint)))))
+             (proxy [org.piccolo2d.PNode] []
+               (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
+                 (do (push-tp ppaint)
+                     (proxy-super fullPaint ppaint)
+                     (pop-tp ppaint)))))
         _  (when (atom? alpha)
              (add-watch alpha :fade (fn [k r old new]
                                       (when (not= old new)                                          
@@ -482,6 +489,106 @@
 (defn ^PNode ->rotate [theta child]
   (let [theta (double theta)]                   
     (add-child  (doto (PNode.) (.rotate theta)) child)))
+
+
+(defn dist [l r]
+  (let [x1 (nth  l 0)
+        y1 (nth  l 1)
+        x2 (nth  r 0)
+        y2 (nth  r 1)]
+    [(- x2 x1)
+     (- y2 y1)]))
+(defn  norm [dx dy]
+  (Math/sqrt (+ (Math/pow dx 2)
+                (Math/pow dy 2))))
+
+(defn direction
+  [[x y]  [x2 y2]]
+  (let [dx (-  x2 x)
+        dy (- y2 y)
+        norm (norm dx dy)]                                     
+    [ (/ dx norm) (/ dy norm)]))
+
+;;this is actually useful beyond just our node logic.
+;;we'll pull it into the simulation stuff too.
+;;Motion/animation...
+;;Might be nice to have a general purpose path follower that
+;;changes position on updates.  We have a point queue
+;;that we can share, and the node will translate accordingly.
+;;Then, we can just populate the point queue (like a channel)
+;;with points from wherever.
+(defn follow-path [x y speed  points ]
+  ;;translate a node, over time, going from point-to-point.
+  (let [pos       (atom [x y]) ;arrays are mutable and fast.
+        vel       (atom (let [[vx vy] (direction [x y] (first points))]
+                          [(* vx speed)
+                           (* vy speed)]))
+        remaining (atom points)
+        ]
+    ;;this is really just a parametric curve.
+    ;;we're walking as far as possible each time step.
+    ;;governed by the constraints of the linear segments.
+    ;;and speed/time.  Velocity and position are a consequence
+    ;;of the walk.  deltas in position turn into node translations.
+    (fn walk! [t]
+      (when-let [pts (seq @remaining)]          
+        (loop [available (* speed t)
+               current   @pos
+               pts      pts]          
+            (cond (not (pos? available))
+              ;;we have to wait for more time.
+              ;;we're left at the current position.
+                  {:position pos :velocity vel :remaining remaining}
+                  (empty? pts)
+                        (let [res (dist @pos current)
+                              _    (reset! pos current)]
+                              res)  ;last point, possible small step.
+                  :else 
+                  ;;we can keep walking       
+                  (let [target    (first pts)
+                        [dx dy]   (dist current target)
+                        required  (norm dx  dy)                  
+                        covered   (-  available required) ]           
+                    (if (pos? covered) ;we have excess travel capacity...                  
+                      (recur covered
+                         target
+                         (rest pts))
+                  ;;we need to update our position
+                  ;;we're in-transit how far along the segment?              
+                  (let [;;scale that by unit velocity vector.
+                        [vx vy] (direction current target) ;direction vector
+                        dx    (* vx available) ;;displacement
+                        dy    (* vy available)
+                        destx (+ dx (first current)) ;actual end point.
+                        desty (+ dy (second current))
+                        ;;our displacement from original position
+                        offx (- destx (nth @pos 0)) 
+                        offy (- desty (nth @pos 1))
+                        _    (reset! pos [(+ offx (nth current 0))
+                                          (+ offy (nth current 1))])
+                        _    (reset! remaining pts)]
+                    [offx offy] ;;total displacement from current
+                    ;{:position pos :velocity vel :remaining remaining}
+                    )))))))))
+
+;;follows along a path.
+(defn follow-path! [^PNode nd pts speed]
+  (let [bounds      (.getFullBounds nd)
+        x           (.getX nd)
+        y           (.getY nd)
+        next-offset (follow-path x y speed pts)]
+    (fn [t]
+      (when-let [res (next-offset t)]
+        (translate! nd (double (first res)) (double (second res)))))))
+
+(comment ;testing
+  (def the-path (->orientedCurve :black 0 0 200 200))
+  (def the-points (flatten-path the-path 1))
+  (def the-glyph (->rect :red 0 0 10 10))
+  (def update! (follow-path! the-glyph (cycle (concat the-points (reverse the-points))) 15))
+  
+)
+
 
 ;;simulates a node who's state changes over time.  Specifically, the
 ;;paint decays to nothing linearly.
