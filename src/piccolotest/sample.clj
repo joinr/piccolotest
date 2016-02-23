@@ -270,6 +270,63 @@
      (with-node-meta meta)))
   ([color x y x2 y2] (->line color x y x2 y2 {})))
 
+(defn ^PNode ->arc
+  ([color x y width height start extent meta]
+   (->
+     (doto
+       (PPath/createArc (double x) (double y) (double width) (double height) (double start) (double extent) java.awt.geom.Arc2D/OPEN)
+       (.setStrokePaint (swing/get-gui-color color)))
+     (with-node-meta meta)))
+  ([color x y width height start extent] (->arc color x y width height start extent {})))
+
+(defn ^PNode ->quadCurve
+  ([color x y ctrlx ctrly x2 y2 meta]
+   (->
+     (doto
+       (PPath/createQuadCurve (double x) (double y) (double ctrlx) (double ctrly) (double x2) (double y2))
+       (.setStrokePaint (swing/get-gui-color color))
+       (.setPaint (java.awt.Color. 1 0 0 100))
+     (with-node-meta meta))))
+  ([color x y ctrlx ctrly x2 y2 ] (->quadCurve color x y ctrlx ctrly x2 y2  {})))
+
+(defn flatten-path [^PPath p flatness]
+  (let [points (double-array 6)
+        p (java.awt.geom.FlatteningPathIterator. (.getPathIterator (.getPath p) (java.awt.geom.AffineTransform.))
+                                                 flatness
+                                                 )]
+    (loop [acc []]
+      (if (.isDone p)
+        acc
+        (do (.currentSegment p points)
+            (.next p)
+            (recur (conj acc  [(aget points 0)
+                               (aget points 1)
+                              ])))))))
+
+(defn ->marked-path [^PPath p]
+  [p
+   (mapv (fn [[x y]]
+           (->rect :black x y 1 1))
+         (flatten-path p 1))])
+             
+
+(defn ^PNode ->orientedCurve
+  ([color x y x2 y2 meta]
+   (let [dx (- x2 x)
+         dy (- y2 y)
+         mpx (+ x (/ dx 2.0))
+         mpy (+ y (/ dy 2.0))
+         [nx ny] (if  (< y2 y)
+                   [(/ dx 2.0)
+                    (/ (- dy) 2.0)]
+                   [ (/ (- dx) 2.0)
+                     (/ dy 2.0)])              
+         ctrlx (+ mpx nx)
+         ctrly (+ mpy ny)
+         ]
+     (->quadCurve color x y ctrlx ctrly x2 y2 meta)))
+  ([color x y x2 y2] (->orientedCurve color x y x2 y2 {})))
+
 (defn ^PNode ->circle
   ([color x y w h meta]
    (->  (doto
@@ -396,18 +453,39 @@
         ]
     (add-child nd child)))
 
+(defn atom? [x] (instance? clojure.lang.Atom x))
+
+;;Supports animated, time-varying fade via the atom.
 (defn ^PNode ->fade [alpha child]
-  (let [alpha (float alpha)        
+  (let [alpha  (if (atom? alpha) alpha  (float alpha))
+        push-tp (if (atom? alpha)
+                  (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                    (.pushTransparency ppaint (float @alpha)))
+                  (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                    (.pushTransparency ppaint ^float alpha)))
+        pop-tp (if (atom? alpha)
+                 (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                   (.popTransparency ppaint (float @alpha)))
+                 (fn [^org.piccolo2d.util.PPaintContext ppaint]
+                   (.popTransparency ppaint ^float alpha)))
         nd (proxy [org.piccolo2d.PNode] []
              (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
-               (do (.pushTransparency ppaint alpha)
+               (do (push-tp ppaint)
                    (proxy-super fullPaint ppaint)
-                   (.popTransparency ppaint alpha))))]                   
+                   (pop-tp ppaint))))
+        _  (when (atom? alpha)
+             (add-watch alpha :fade (fn [k r old new]
+                                      (when (not= old new)                                          
+                                        (invalidate! ^PNode nd)))))]
     (add-child  nd child)))
 
 (defn ^PNode ->rotate [theta child]
   (let [theta (double theta)]                   
     (add-child  (doto (PNode.) (.rotate theta)) child)))
+
+;;simulates a node who's state changes over time.  Specifically, the
+;;paint decays to nothing linearly.
+;;returns a callback that can be used to decay the node.
 
 (defn degrees [n] (* n (/ Math/PI 180.0)))
 
@@ -435,7 +513,8 @@
                    (scale! 1.0 -1.0))]
       (add-child origin child))))
   ([^PNode child]
-   (->cartesian (.getHeight (.getFullBounds child)) child)))
+   (let [child (as-node child)]
+     (->cartesian (.getHeight (.getFullBounds child)) child))))
 
           
 ;;general transform node.
