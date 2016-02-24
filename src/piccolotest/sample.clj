@@ -520,6 +520,10 @@
 (defn follow-path [x y speed  points ]
   ;;translate a node, over time, going from point-to-point.
   (let [pos       (atom [x y]) ;arrays are mutable and fast.
+        points    (filter (fn [p]
+                            (let [[dx dx] (dist @pos p)]
+                              (not (and (zero? dx) (zero? dx)))))
+                          points)
         vel       (atom (let [[vx vy] (direction [x y] (first points))]
                           [(* vx speed)
                            (* vy speed)]))
@@ -535,24 +539,25 @@
         (loop [available (* speed t)
                current   @pos
                pts      pts]          
-            (cond (not (pos? available))
-              ;;we have to wait for more time.
-              ;;we're left at the current position.
-                  {:position pos :velocity vel :remaining remaining}
-                  (empty? pts)
+            (cond (empty? pts)
                         (let [res (dist @pos current)
-                              _    (reset! pos current)]
-                              res)  ;last point, possible small step.
+                              _    (reset! pos current)
+                              _ (reset! remaining nil)]
+                              (with-meta res {:point current}))  ;last point, possible small step.
                   :else 
                   ;;we can keep walking       
-                  (let [target    (first pts)
+                  (let [
+                        target    (first pts)
                         [dx dy]   (dist current target)
                         required  (norm dx  dy)                  
-                        covered   (-  available required) ]           
-                    (if (pos? covered) ;we have excess travel capacity...                  
-                      (recur covered
-                         target
-                         (rest pts))
+                        covered   (-  available required)
+                      ;  _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
+                                   ]           
+                    (if (pos? covered) ;we have excess travel capacity...
+                      (do ;(println :passing-through target)
+                          (recur covered
+                                 target
+                                 (rest pts)))
                   ;;we need to update our position
                   ;;we're in-transit how far along the segment?              
                   (let [;;scale that by unit velocity vector.
@@ -564,10 +569,12 @@
                         ;;our displacement from original position
                         offx (- destx (nth @pos 0)) 
                         offy (- desty (nth @pos 1))
-                        _    (reset! pos [(+ offx (nth current 0))
-                                          (+ offy (nth current 1))])
+                      ;  _ (println [:updating @pos :velocity [dx dy] :through current :to target :off [offx offy]])
+                        _    (reset! pos [destx
+                                          desty])
                         _    (reset! remaining pts)]
-                    [offx offy] ;;total displacement from current
+                    (with-meta [offx offy]
+                      {:point @pos});;total displacement from current
                     ;{:position pos :velocity vel :remaining remaining}
                     )))))))))
 
