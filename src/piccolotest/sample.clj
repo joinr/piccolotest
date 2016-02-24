@@ -175,11 +175,17 @@
 
 ;(defn ->layer  []  (PLayer.))
 
+(defn ^double get-yscale [^PNode nd]
+  (.getScaleY (.getTransformReference nd false)))
+(defn ^double get-xscale [^PNode nd]
+  (.getScaleX (.getTransformReference nd false)))
+(defn cartesian? [^PNode nd]
+  (neg? ^double (get-yscale nd)))
+
 ;;we should redefine this relative to cartesian coords.
 (defn ^PNode translate!
   [^PNode nd ^double x ^double y]
    (doto nd (.translate x y)))
-
 
 (defn ^PNode transform!
   [^PNode nd ^AffineTransform xform]
@@ -517,7 +523,7 @@
 ;;that we can share, and the node will translate accordingly.
 ;;Then, we can just populate the point queue (like a channel)
 ;;with points from wherever.
-(defn follow-path [x y speed  points ]
+(defn follow-path [x y speed  points]
   ;;translate a node, over time, going from point-to-point.
   (let [pos       (atom [x y]) ;arrays are mutable and fast.
         points    (filter (fn [p]
