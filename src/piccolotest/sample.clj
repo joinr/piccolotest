@@ -526,9 +526,9 @@
 (defn follow-path [x y speed  points]
   ;;translate a node, over time, going from point-to-point.
   (let [pos       (atom [x y]) ;arrays are mutable and fast.
-        points    (filter (fn [p]
-                            (let [[dx dx] (dist @pos p)]
-                              (not (and (zero? dx) (zero? dx)))))
+        points    (drop-while (fn [p]
+                                (let [[dx dx] (dist @pos p)]
+                                   (and (zero? dx) (zero? dx))))
                           points)
         vel       (atom (let [[vx vy] (direction [x y] (first points))]
                           [(* vx speed)
@@ -587,11 +587,11 @@
 ;;follows along a path.
 (defn follow-path! [^PNode nd pts speed]
   (let [bounds      (.getFullBounds nd)
-        x           (.getX nd)
-        y           (.getY nd)
+        x           (.getX bounds)
+        y           (.getY bounds)
         next-offset (follow-path x y speed pts)]
     (fn [t]
-      (when-let [res (next-offset t)]
+      (when-let [res (next-offset t)]        
         (translate! nd (double (first res)) (double (second res)))))))
 
 (comment ;testing
