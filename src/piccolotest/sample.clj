@@ -285,15 +285,20 @@
      (with-node-meta meta)))
   ([color x y width height start extent] (->arc color x y width height start extent {})))
 
+(defn clear-background! [^PNode nd]
+  (.setPaint (java.awt.Color. 1 0 0 100)))
+
+
 (defn ^PNode ->quadCurve
   ([color x y ctrlx ctrly x2 y2 meta]
    (->
      (doto
        (PPath/createQuadCurve (double x) (double y) (double ctrlx) (double ctrly) (double x2) (double y2))
        (.setStrokePaint (swing/get-gui-color color))
-       (.setPaint (java.awt.Color. 1 0 0 100))
+       (.setPaint (java.awt.Color. 1 0 0 0))
      (with-node-meta meta))))
   ([color x y ctrlx ctrly x2 y2 ] (->quadCurve color x y ctrlx ctrly x2 y2  {})))
+
 
 (defn flatten-path [^PPath p flatness]
   (let [points (double-array 6)
@@ -592,14 +597,16 @@
                     )))))))))
 
 ;;follows along a path.
-(defn follow-path! [^PNode nd pts speed]
-  (let [bounds      (.getFullBounds nd)
-        x           (.getX bounds)
-        y           (.getY bounds)
-        next-offset (follow-path x y speed pts)]
-    (fn [t]
-      (when-let [res (next-offset t)]        
-        (translate! nd (double (first res)) (double (second res)))))))
+(defn follow-path!
+  ([^PNode nd pts speed f]
+   (let [bounds      (.getFullBounds nd)
+         x           (.getX bounds)
+         y           (.getY bounds)
+         next-offset (follow-path x y speed pts)]
+     (fn [t]
+       (when-let [res (next-offset t)]        
+         (f nd (double (first res)) (double (second res)))))))
+  ([nd pts speed] (follow-path! nd pts speed translate!)))
 
 (comment ;testing
   (def the-path (->orientedCurve :black 0 0 200 200))
