@@ -375,14 +375,13 @@
   ([source] (->image source {})))
 
 
-;;need a more idiomatic way to do this...
-;; (defn ^PNode ->scaled-image
-;;   ([scalex scaley source meta]
-;;    (->scale scalex scaley 
-;;             (->  (PImage. ^java.awt.Image (spork.graphics2d.canvas/as-buffered-image source :buffered-image))
-;;                  (with-node-meta meta)
-;;                  (uncartesian!))))
-;;   ([scalex scaley source] (->image source {})))
+(defn ->scaled-image [img xscale yscale & {:keys [id]}]
+  (picc/with-node-meta  
+    (picc/->scale xscale yscale
+                  (picc/->image img))
+    ((if id #(assoc % :id id) identity) 
+     {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]      
+      })))
 
 ;;given a shapestack...
 ;;we can get a sketching surface that's compatible as both a
