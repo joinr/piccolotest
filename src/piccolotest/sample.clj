@@ -16,6 +16,7 @@
     PSelectionEventHandler
     PNotification
     PNotificationCenter]
+   [org.piccolo2d.activities PActivity]
    [org.piccolo2d.extras.pswing PSwing PSwingCanvas]
    [org.piccolo2d.extras.swing SwingLayoutNode]
    [org.piccolo2d.extras.swing.SwingLayoutNode.Anchor]
@@ -26,7 +27,8 @@
    [java.awt.event   InputEvent MouseEvent]
    [java.awt.geom   Point2D AffineTransform]
    [javax.swing     JFrame JPanel Box BoxLayout] 
-   [java.util  ArrayList Random]))
+   [java.util  ArrayList Random]
+   [java.util.concurrent ConcurrentLinkedQueue]))
 
 ;;Useful protocol 
 
@@ -40,7 +42,7 @@
 (defn notify!! [msg]
   (>!! node-channel msg))
 
-(defn add-child! [^PNode p ^PNode c] (doto p (.addChild c)))
+(defn add-child!  [^PNode p ^PNode c] (doto p (.addChild c)))
 (defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
 ;;the problem we're currently having is extending node-like functionality
@@ -139,6 +141,90 @@
   (doto nd
     (.invalidatePaint)))
 
+;;We wrap the activity delegate schedule activities on the event dispatch
+;;thread, so piccolo will properly schedule changes to nodes.  In particular,
+;;when we schedule changes to the structure of the graph, we end up
+;;with possible errors due to piccol being in the middle of painting.
+;;In essence, we have to schedule nodes to be dropped at piccolo's convenience.
+(defn ^org.piccolo2d.activities.PActivity$PActivityDelegate
+  ->activity-delegate [& {:keys [start step finish]}]
+  (reify org.piccolo2d.activities.PActivity$PActivityDelegate
+    (^void activityStarted [this ^PActivity activity]
+      (start activity))
+    (^void activityStepped [this ^PActivity activity]
+      (step activity))
+    (^void activityFinished [this ^PActivity activity]
+      (finish activity))))
+
+(defn ^PActivity ->activity
+  [& {:keys [duration step-rate start-time start finish step]
+      :or {duration -1  ;infinite
+           step-rate 16 ;60 fps
+           start (fn [_] nil)
+           step (fn [_] nil)
+           finish (fn [_] nil)}
+           }]
+  (let [start-time (or start-time (System/currentTimeMillis))
+        pa (PActivity. (long duration) (long step-rate) (long start-time))
+        del (->activity-delegate :start start :finish finish :step step)]
+    (doto pa (.setDelegate del)))) 
+
+;;schedule an activity...
+;;should this be with root?
+(defn ^PNode add-activity! [^PNode node ^PActivity act]
+  (if-let [res (.addActivity node act)]
+    node
+    (throw (Exception. (str "Tried to add an activity to " node " with no root")))))
+
+(defn get-schedule [^PNode nd]
+  (if-let [^PRoot rt (.getRoot nd)]
+    (if-let [s (get (node-meta ^PNode rt) :schedule)]
+      s
+      (let [schedule (ConcurrentLinkedQueue.) ;we're allowing multiple threads to schedule.
+            _       (with-node-meta rt {:schedule schedule})
+            ;;if the schedule doesn't exist, we'll add a perpetual activity that checks
+            ;;the schedule for thunks, and flushes the schedule by executing thunks between frames.
+            _       (add-activity! rt  
+                       (->activity :step
+                           (fn [_]
+                             (loop []
+                               (when-let [f (.poll schedule)]
+                                 (do (f)
+                                     (recur))))))) 
+            ]
+        schedule))
+    (throw (Exception. (str "Node is unrooted, cannot be scheduled." nd)))))
+
+(defn push-schedule! [^ConcurrentLinkedQueue s o]
+  (doto s (.add o)))
+
+(defmacro schedule!
+  "Schedule body to run in between rendering the next frame.  Basically, 
+   defer execution until piccolo is in between frames, i.e. nothing is 
+   rendering.  This allows us to concurrently serialize changes to scene 
+   graph without generating inconsistencies and thus errors (like 
+   arraylist index errors while trying to iterate over nonexistent 
+   children due to drops) "
+  [nd & body]
+  (let [nd (with-meta nd {:tag 'org.piccolo2d.PNode})]
+    `(let [thunk# (fn [] ~@body)
+           sched# (get-schedule ~nd)]
+       (do (push-schedule! sched# thunk#)
+           ~nd))))
+       
+       
+  
+      
+;;this is most common.
+;;We can pass in a thunk..
+;;and have an infinite activity that
+;;evaluates pending thunks.
+(defn schedule! [^PNode node thunk]
+  (if-let [^PRoot rt (.getRoot parent)]
+    (
+    
+  
+
 (comment 
 (dotimes [i 1000]
   (let [[c r] [(rand-int 28) (rand-int 60)]]
@@ -191,6 +277,9 @@
   [^PNode nd ^AffineTransform xform]
   (doto nd (.setTransform xform)))
 
+(defn ^PNode set-visible!
+  [^PNode nd vis]
+   (doto nd (.setVisible (boolean vis))))
 
 ;;probably make this something else...
 (defn ^PNode translate
@@ -228,7 +317,7 @@
   (node-meta [nd])
   (with-node-meta [nd m]))
                        
-(extend-type org.piccolo2d.PNode
+(extend-protocol org.piccolo2d.PNode
   MetaNode
   (node-meta [obj]         (.getAttribute obj "meta"))
   (with-node-meta [obj m]  (.addAttribute obj "meta" m) obj))
@@ -452,6 +541,7 @@
                     (.translate (double x) (double y)))
         nd  (doto (PNode.) (.setTransform trans))]
      (add-child nd child)))
+
 
 ;(defn ->ctrans [x y nd] (->translate x ( - y) nd))
 
