@@ -563,7 +563,11 @@
                         (let [res (dist @pos current)
                               _    (reset! pos current)
                               _ (reset! remaining nil)]
-                              (with-meta res {:point current}))  ;last point, possible small step.
+                          ;(with-meta
+                            res
+                          ;  {:point current}
+                            ;)
+                          )  ;last point, possible small step.
                   :else 
                   ;;we can keep walking       
                   (let [
@@ -593,8 +597,11 @@
                         _    (reset! pos [destx
                                           desty])
                         _    (reset! remaining pts)]
-                    (with-meta [offx offy]
-                      {:point @pos});;total displacement from current
+                   ; (with-meta
+                      [offx offy]
+                      ;{:point @pos}
+                    ;  )
+                    ;;total displacement from current
                     ;{:position pos :velocity vel :remaining remaining}
                     )))))))))
 
@@ -606,8 +613,8 @@
          y           (.getY bounds)
          next-offset (follow-path x y speed pts)]
      (fn [t]
-       (when-let [res (next-offset t)]        
-         (f nd (double (first res)) (double (second res)))))))
+       (when-let [^clojure.lang.PersistentVector res (next-offset t)]        
+         (f nd (double (.nth res 0)) (double (.nth res 1)))))))
   ([nd pts speed] (follow-path! nd pts speed translate!)))
 
 (comment ;testing
