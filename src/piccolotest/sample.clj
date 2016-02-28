@@ -376,9 +376,9 @@
 
 
 (defn ->scaled-image [img xscale yscale & {:keys [id]}]
-  (picc/with-node-meta  
-    (picc/->scale xscale yscale
-                  (picc/->image img))
+  (with-node-meta  
+    (->scale xscale yscale
+             (->image img))
     ((if id #(assoc % :id id) identity) 
      {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]      
       })))
