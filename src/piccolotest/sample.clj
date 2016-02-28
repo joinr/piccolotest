@@ -466,14 +466,6 @@
                     (.scale (double xscale) (double yscale)))
         nd  (doto (PNode.)
               (.setTransform trans))
-        ;; nd (proxy [org.piccolo2d.PNode] []
-        ;;      (layoutChildren [] 
-        ;;        (reduce
-        ;;         (fn [acc ^PNode nd]           
-        ;;           (.scale nd xscale yscale))
-        ;;         nil
-        ;;         (iterator-seq (.getChildrenIterator this)))
-        ;;        (proxy-super layoutChildren)))
         ]
     (add-child nd child)))
 
