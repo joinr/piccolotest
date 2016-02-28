@@ -592,7 +592,7 @@
                        ; _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
                                    ]           
                     (if (pos? covered) ;we have excess travel capacity...
-                      (do (println :passing-through target)
+                      (do ;(println :passing-through target)
                           (recur covered
                                  target
                                  (rest pts)))
