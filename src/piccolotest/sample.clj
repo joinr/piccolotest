@@ -214,8 +214,10 @@
   [^PNode nd ^double x ^double y]
    (doto nd (.translate x (- y))))
 
-(defn ^PNode translate-to! [^PNode nd ^double x ^double y]
-  (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y)))
+(defn ^PNode translate-to!
+  ([^PNode nd ^double x ^double y]
+   (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y)))
+  ([nd ^clojure.lang.PersistentVector xy] (translate-to! nd (.nth xy 0) (.nth xy 1)))) 
 
 (defn ^PNode translate-by! [^PNode nd ^double x ^double y ]
   (let [trans (doto (AffineTransform.)
@@ -375,13 +377,6 @@
   ([source] (->image source {})))
 
 
-(defn ->scaled-image [img xscale yscale & {:keys [id]}]
-  (with-node-meta  
-    (->scale xscale yscale
-             (->image img))
-    ((if id #(assoc % :id id) identity) 
-     {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]      
-      })))
 
 ;;given a shapestack...
 ;;we can get a sketching surface that's compatible as both a
@@ -482,6 +477,15 @@
         ]
     (add-child nd child)))
 
+(defn ->scaled-image [img xscale yscale & {:keys [id]}]
+  (with-node-meta  
+    (->scale xscale yscale
+             (->image img))
+    ((if id #(assoc % :id id) identity) 
+     {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]      
+      })))
+
+
 (defn atom? [x] (instance? clojure.lang.Atom x))
 
 ;;Supports animated, time-varying fade via the atom.
@@ -573,7 +577,8 @@
                               _    (reset! pos current)
                               _ (reset! remaining nil)]
                           ;(with-meta
-                            res
+                                        ;res
+                          current
                           ;  {:point current}
                             ;)
                           )  ;last point, possible small step.
@@ -584,10 +589,10 @@
                         [dx dy]   (dist current target)
                         required  (norm dx  dy)                  
                         covered   (-  available required)
-                      ;  _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
+                       ; _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
                                    ]           
                     (if (pos? covered) ;we have excess travel capacity...
-                      (do ;(println :passing-through target)
+                      (do (println :passing-through target)
                           (recur covered
                                  target
                                  (rest pts)))
@@ -600,14 +605,15 @@
                         destx (+ dx (first current)) ;actual end point.
                         desty (+ dy (second current))
                         ;;our displacement from original position
-                        offx (- destx (nth @pos 0)) 
-                        offy (- desty (nth @pos 1))
-                      ;  _ (println [:updating @pos :velocity [dx dy] :through current :to target :off [offx offy]])
+                       ; offx (- destx (nth @pos 0)) 
+                       ; offy (- desty (nth @pos 1))
+                       ; _ (println [:updating @pos :velocity [dx dy] :through current :to target ])
                         _    (reset! pos [destx
                                           desty])
                         _    (reset! remaining pts)]
                    ; (with-meta
-                      [offx offy]
+                                        ;[offx offy]
+                    [destx desty]
                       ;{:point @pos}
                     ;  )
                     ;;total displacement from current
@@ -618,13 +624,25 @@
 (defn follow-path!
   ([^PNode nd pts speed f]
    (let [bounds      (.getFullBounds nd)
-         x           (.getX bounds)
-         y           (.getY bounds)
-         next-offset (follow-path x y speed pts)]
+         x           (.getX      bounds)
+         y           (.getY      bounds)
+         next-point (follow-path x y speed pts)]
      (fn [t]
-       (when-let [^clojure.lang.PersistentVector res (next-offset t)]        
+       (when-let [^clojure.lang.PersistentVector res (next-point t)]        
          (f nd (double (.nth res 0)) (double (.nth res 1)))))))
   ([nd pts speed] (follow-path! nd pts speed translate!)))
+
+;; (defn follow-path!
+;;   ([^PNode nd pts speed f]
+;;    (let [bounds      (.getFullBounds nd)
+;;          x           (.getX bounds)
+;;          y           (.getY bounds)
+;;          next-offset (follow-path x y speed pts)]
+;;      (fn [t]
+;;        (when (pos? t) ;we can cancel with a negative number.
+;;          (when-let [^clojure.lang.PersistentVector res (next-offset t)]        
+;;            (f nd (double (.nth res 0)) (double (.nth res 1))))))))
+;;   ([nd pts speed] (follow-path! nd pts speed translate!)))
 
 (comment ;testing
   (def the-path (->orientedCurve :black 0 0 200 200))
