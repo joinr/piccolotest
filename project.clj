@@ -3,7 +3,7 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :aot [piccolotest.GraphEditor]
+  ;:aot [piccolotest.GraphEditor]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [spork "0.1.9.5-SNAPSHOT"]
                  [org.piccolo2d/piccolo2d-core "3.0"]
