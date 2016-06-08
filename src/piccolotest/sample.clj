@@ -274,9 +274,20 @@
    (->
      (doto
        (PPath/createRectangle (double x) (double y) (double w) (double h))
-       (.setPaint (swing/get-gui-color color)))
+       (.setStrokePaint (swing/get-gui-color color))
+       (.setPaint nil))
      (with-node-meta meta)))
   ([color x y w h] (->rect color x y w h {})))
+
+(defn ^PNode ->filled-rect
+  ([color x y w h meta]
+   (->
+     (doto
+       (PPath/createRectangle (double x) (double y) (double w) (double h))
+       (.setPaint (swing/get-gui-color color))
+       (.setStroke nil))
+     (with-node-meta meta)))
+  ([color x y w h] (->filled-rect color x y w h {})))
 
 (defn ^PNode ->line
   ([color x y x2 y2 meta]

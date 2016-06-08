@@ -85,16 +85,18 @@
                                         ;(p/transform!  xform)
                  )))
 
+;;need to fix this so we have a rectangle that's
+;;not filled.....
 (defmethod nodify :rectangle  [[_  color x y w h :as nd]]
   (register! nd
-             (-> (p/->rect color x y w h)
+             (-> (p/->rect color x y w h)                 
                                         ;      (p/translate! x y)
                                         ;(p/transform!  xform)
                  )))
 ;;temporary
 (defmethod nodify :fill-rectangle  [[_  color x y w h :as nd]]
   (register! nd
-             (-> (p/->rect color x y w h)
+             (-> (p/->filled-rect color x y w h)
                                         ;      (p/translate! x y)
                                         ;(p/transform!  xform)
                  )))
