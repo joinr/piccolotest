@@ -7,7 +7,7 @@
             [clojure.core.async :as a
              :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]])
   (:import
-   [org.piccolo2d         PCanvas PLayer PNode PRoot]
+   [org.piccolo2d         PCanvas PLayer PNode PRoot POffscreenCanvas PCamera]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
                           PInputEvent PInputEventFilter]
    [org.piccolo2d.nodes   PPath PImage PText PShape]
@@ -113,6 +113,9 @@
   org.piccolo2d.PCanvas
   (as-node   [nd]        (.getRoot ^PCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
+  org.piccolo2d.POffscreenCanvas
+  (as-node   [nd]        (.getRoot ^POffscreenCanvas nd))
+  (add-child [nd chld] (do (.addChild (.getLayer ^PCamera (.getCamera nd) 0) (as-node chld)) nd))  
   org.piccolo2d.extras.pswing.PSwingCanvas
   (as-node [nd]        (.getRootNode ^PSwingCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer ^PSwingCanvas nd) (as-node chld)) nd))
@@ -186,6 +189,10 @@
 (defn ^PCanvas ->canvas
   ([]  (PCanvas.))
   ([& nodes] (reduce add-child (PCanvas.) nodes)))
+
+(defn ^POffscreenCanvas ->offscreen-canvas
+  ([w h]  (POffscreenCanvas. (int w) (int h)))
+  ([w h & nodes] (reduce add-child (POffscreenCanvas. (int w) (int h)) nodes)))
 
 ;(defn ->layer  []  (PLayer.))
 
@@ -423,6 +430,22 @@
       (add-child nd n))
     nd))
 
+(defn ^PNode ->spaced-shelf
+  [spacing & nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double xoffset ^PNode nd]
+                      (let [w (.getWidth (.getFullBoundsReference nd))]              
+                        (.setOffset nd (- xoffset (.getX nd)) 0.0)
+                        (+ xoffset w spacing)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (add-child nd n))
+    nd))
+
 ;;like shelf, except it aligns children by
 ;;their midpoint of the vertical bounds as well.
 ;; (defn ^PNode ->mid-shelf
@@ -458,6 +481,24 @@
     (doseq [n nodes]
       (add-child nd n))
     nd))
+
+(defn ^PNode ->spaced-stack
+  [spacing & nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double yoffset ^PNode nd]
+                      (let [bnds (.getFullBoundsReference nd)
+                            h (.getHeight bnds )]              
+                        (.setOffset nd 0.0 (+ yoffset h))
+                        (+ yoffset spacing h)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (add-child nd n))
+    nd))
+
 
 (defn ^PNode ->translate [x y child]
   (let [x  (double x)
@@ -698,9 +739,28 @@
   ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
 
 (defn center!
-  ([cnv]
-   (doto (.. cnv getCamera)
-     (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0))))
+  [cnv]
+  (doto (.. cnv getCamera)
+    (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
+(defn center-offscreen! [cnv]
+  (doto (.. cnv getCamera)
+    (.animateViewToCenterBounds  (layer-bounds (.getLayer (.getCamera cnv) 0)) true 0)))
+
+(defn offscreen! [nd & {:keys [transform background width height]
+                        :or {width 600 height 600}}]
+  (let  [cnv   (->offscreen-canvas width height)              
+         layer (.getLayer (.getCamera cnv) 0)
+         _     (when transform (.setTransform layer transform))
+         _     (when background (if (or (node? background)
+                                        (satisfies? IPiccNode background))
+                                  (add-child! layer (as-node nd))
+                                  (.setPaint (.getCamera cnv) background)))]
+    (add-child cnv (as-node nd))
+   ; (when handler (.addInputEventListener layer handler))
+    (center-offscreen! cnv)
+                                        ;(show! cnv)
+    cnv
+    ))
 
 ;;animate entities...
 (defn render!  [nd & {:keys [transform background handler]}]
