@@ -733,7 +733,8 @@
 
 (defn get-canvas! []
   (when-let [f @frame]
-    (.getContentPane f)))
+    (.getComponent
+     (.getContentPane f) 0)))
 ;;rotate all the rects....
 (defn layer-bounds
   ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
@@ -762,6 +763,10 @@
     cnv
     ))
 
+;;This allows us to render out to graphics.
+(defn render-to [nd ^java.awt.Graphics2D graphics]
+  (.render nd graphics))  
+
 ;;animate entities...
 (defn render!  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
@@ -776,3 +781,46 @@
       (when handler (.addInputEventListener layer handler))
       (center! cnv)
       (show! cnv)))
+
+
+(defn render-raw!  [nd & {:keys [transform background handler]}]
+    (let  [cnv (doto (->canvas)
+                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+           layer (.getLayer cnv)
+           _     (when transform (.setTransform layer transform))
+           _     (when background (if (or (node? background)
+                                          (satisfies? IPiccNode background))
+                                    (add-child! layer (as-node nd))
+                                    (.setPaint (.getCamera cnv) background)))]
+      (add-child! layer (as-node nd))
+      (when handler (.addInputEventListener layer handler))
+;      (center! cnv)
+      (show! cnv)))
+
+(defn node->canvas  [nd & {:keys [transform background handler]}]
+    (let  [cnv (doto (->canvas)
+                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+           layer (.getLayer cnv)
+           _     (when transform (.setTransform layer transform))
+           _     (when background (if (or (node? background)
+                                          (satisfies? IPiccNode background))
+                                    (add-child! layer (as-node nd))
+                                    (.setPaint (.getCamera cnv) background)))]
+      (add-child! layer (as-node nd))
+      (when handler (.addInputEventListener layer handler))
+      (center! cnv)
+      cnv))
+
+(defn node->swingcanvas  [nd & {:keys [transform background handler]}]
+    (let  [cnv (doto (->swing-canvas)
+                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+           layer (.getLayer cnv)
+           _     (when transform (.setTransform layer transform))
+           _     (when background (if (or (node? background)
+                                          (satisfies? IPiccNode background))
+                                    (add-child! layer (as-node nd))
+                                    (.setPaint (.getCamera cnv) background)))]
+      (add-child! layer (as-node nd))
+      (when handler (.addInputEventListener layer handler))
+      (center! cnv)
+      cnv))
