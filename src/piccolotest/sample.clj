@@ -16,7 +16,7 @@
     PSelectionEventHandler
     PNotification
     PNotificationCenter]
-   [org.piccolo2d.activities PActivity]
+   [org.piccolo2d.activities    PActivity]
    [org.piccolo2d.extras.pswing PSwing PSwingCanvas]
    [org.piccolo2d.extras.swing SwingLayoutNode]
    [org.piccolo2d.extras.swing.SwingLayoutNode.Anchor]
@@ -53,6 +53,7 @@
   [& body]
   `(invoke-later! (~'fn [] (do ~@body))))
 
+;;These may be giving us grief, since we're not on the edt...
 (defn add-child!  [^PNode p ^PNode c] (doto p (.addChild c)))
 (defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
@@ -528,6 +529,7 @@
 
 (defn atom? [x] (instance? clojure.lang.Atom x))
 
+;;I think this may be killing us.....
 ;;Supports animated, time-varying fade via the atom.
 (defn ^PNode ->fade [alpha child]
   (let [alpha  (if (atom? alpha) alpha  (float alpha))
@@ -542,7 +544,7 @@
                  (fn [^org.piccolo2d.util.PPaintContext ppaint]
                    (.popTransparency ppaint ^float alpha)))
         nd (if (atom? alpha)
-             (proxy [org.piccolo2d.PNode] []
+             (proxy [org.piccolo2d.PNode] [] ;;possible trouble spot.
                (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
                  (when (>= @alpha 0)
                    (do (push-tp ppaint)
@@ -553,7 +555,7 @@
                  (do (push-tp ppaint)
                      (proxy-super fullPaint ppaint)
                      (pop-tp ppaint)))))
-        _  (when (atom? alpha)
+        _  (when (atom? alpha) ;;possible trouble spot.
              (add-watch alpha :fade (fn [k r old new]
                                       (when (not= old new)                                          
                                         (invalidate! ^PNode nd)))))]
@@ -694,7 +696,7 @@
 ;;I think it's enough to just introduce a transform
 (defn ^PNode ->cartesian
   ([height child]
-   (binding [*cartesian* true]
+   (binding [*cartesian* true] ;;this is going to cost us...
     (let [origin (-> (PNode.)                                      
                      (translate-by! 0.0 (- height))
                      (scale! 1.0 -1.0))]
@@ -743,9 +745,12 @@
   [cnv]
   (doto (.. cnv getCamera)
     (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
-(defn center-offscreen! [cnv]
-  (doto (.. cnv getCamera)
-    (.animateViewToCenterBounds  (layer-bounds (.getLayer (.getCamera cnv) 0)) true 0)))
+(defn center-offscreen!
+  ([cnv ^PBounds bnds]
+   (doto (.. cnv getCamera)
+     (.animateViewToCenterBounds  bnds true 0)))
+  ([cnv] (center-offscreen! cnv (layer-bounds (.getLayer (.getCamera cnv) 0)))))
+
 
 (defn offscreen! [nd & {:keys [transform background width height]
                         :or {width 600 height 600}}]
@@ -765,8 +770,23 @@
 
 ;;This allows us to render out to graphics.
 (defn render-to [nd ^java.awt.Graphics2D graphics]
-  (.render nd graphics))  
+  (.render nd graphics))
 
+;;I think the offscreeen canvas is just a picture....
+;;Could be wrong though...
+(extend-protocol spork.graphics2d.canvas/IShape
+  POffscreenCanvas 
+  (draw-shape [obj g]
+    (do (.render obj g)
+        g))
+  (shape-bounds [obj]
+    (let [^PBounds c (.getFullBounds (.getCamera obj))
+          x (.getX c)          
+          y (.getY c)
+          width  (.getWidth  c)
+          height (.getHeight c)]
+      (spork.protocols.spatial/bbox x y  width height))))
+           
 ;;animate entities...
 (defn render!  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
