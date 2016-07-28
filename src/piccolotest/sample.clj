@@ -54,6 +54,9 @@
   `(invoke-later! (~'fn [] (do ~@body))))
 
 ;;These may be giving us grief, since we're not on the edt...
+;;note: we could queue up children for removal on the edt..
+;;rather than spam the edt with tons of child removal requests,
+;;we could queue them up.
 (defn add-child!  [^PNode p ^PNode c] (doto p (.addChild c)))
 (defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
