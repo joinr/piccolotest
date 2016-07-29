@@ -133,14 +133,14 @@
            (for [[nm clr] (partition 2 series)]
              (let [txt (p/->text (str nm))
                    bounds (.getFullBounds txt)]          
-               [(p/->rect clr 0 0 10 (.getHeight bounds))
+               [(p/->filled-rect clr 0 0 10 (.getHeight bounds))
                 (p/->translate  10 0 txt)
                 ])))
     (apply p/->shelf
            (for [[nm clr] (partition 2 series)]
              (let [txt    (p/->text (str nm))
                    bounds (.getFullBounds txt)]          
-               [(p/->rect clr (/ (.getWidth bounds) 4.0) 0 (/ (.getWidth bounds) 4.0) 10)
+               [(p/->filled-rect clr (/ (.getWidth bounds) 4.0) 0 (/ (.getWidth bounds) 4.0) 10)
                 (p/->translate  0 10 txt)
                 ]
                 )))
