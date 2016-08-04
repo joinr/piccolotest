@@ -560,9 +560,109 @@
                      (pop-tp ppaint)))))
         _  (when (atom? alpha) ;;possible trouble spot.
              (add-watch alpha :fade (fn [k r old new]
-                                      (when (not= old new)                                          
-                                        (invalidate! ^PNode nd)))))]
+                                      (when (not= old new)
+                                       ; (do-scene ;;this didn't help us...
+                                         (invalidate! ^PNode nd))))
+        ;     )
+             )]
     (add-child  nd child)))
+
+;;We want to define a level-of-detail node...
+;;specifically, nodes that change their detail/meaning
+;;based on differing zooms.  This is like semantic zoom...
+;;let's copy the example from the piccolo docs.
+;;Ah....we just have the nodes drawn on top of
+;;eachother....so another way to handle this is
+;;via hiding/visibility....Certain nodes are only
+;;visible at a the appropriate zoom....
+;;Large and small should be the same size...
+;;so the node bounds should be equivalent to large and small.
+;;One trick is to just make the node disappear if it's out of scale...
+;;note: scale is relative right?....
+;;I guess we can just switch visibility....
+(defn ^PNode ->semantic-node
+  ([large  small thresh]
+   (let [^PNode large (as-node large)
+         ^PNode small (as-node small)
+         ;;what about scale/size? 
+         nd  (doto (proxy [org.piccolo2d.PNode] []
+                     (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
+                       (let [s (.getScale ppaint)]
+                         (if (< s thresh)                    
+                           (.fullPaint small ppaint)
+                           (.fullPaint large ppaint)))))
+              (.setBounds (.getBounds small)))]
+     (-> nd (add-child  large)
+         (add-child small))))
+  ([large small] (->semantic-node large small 1.0)))
+
+(defn ->lod-box [thresh node]
+  (let [contents  (as-node node)
+        bbox      (.getFullBounds contents)
+        block     (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))]
+    (->semantic-node contents block thresh)))
+
+;;another idea is to use lod to only paint segments of children...
+;;like....don't paint even children past a threshold....there are
+;;lots of LOD strategies we can use...For instance, rather than
+;;fading, paint solids...faster....
+;; (defn ->lod-node [thresh node]
+;;   (let [contents  (as-node node)
+;;         bbox      (.getFullBounds contents)
+;;         block     (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))]
+;;     (->semantic-node contents block thresh)))
+
+(comment ;testing
+  (defn random-coords [w h n]
+    (repeatedly n (fn [] [(rand-int w) (rand-int h)])))
+  (defn toggle-rect [big small x y w h]
+    (->semantic-node (->filled-rect big x y w h)
+                     (->filled-rect small x y w h)))
+  (defn ->cloud
+    ([w h n]
+     (as-node (vec (for [[x y] (random-coords w h n)]
+                     (toggle-rect :green :blue x y 10 10)))))
+    ([n] (->cloud 600 600 n)))
+  
+  ;;nested-clouds....
+
+  ;;so.....we can have an occluded container...
+  ;;note:  I think primitives have a getBounds result....
+  
+  ;;each parent contains n children.
+  ;;if level = 0, the children are regular clouds,
+  ;;else,
+  ;;  children are nested clouds....
+  ;;  each child is scaled 0.01666 of the parent...
+  ;;  so, at a given level, the child's scale is
+  ;;  0.16 ^ level
+  (defn nested-cloud [n level scale-factor init-scale x y w h]
+    (if (zero? level)
+      ;(->lod-box init-scale 
+      (->translate x y (->cloud (rand-int n)))
+      ;)
+      ;;translate and scale...      
+      (let [current-scale (* scale-factor init-scale)
+            children (for [[x y] (random-coords w h (rand-int n))]
+                       (nested-cloud n
+                                     (unchecked-dec level)
+                                     scale-factor
+                                     current-scale
+                                     x y w h))]
+      (->translate x y
+         (->scale scale-factor scale-factor
+                  (->lod-box  0.8 ;current-scale ;(/ level init-scale);  current-scale) ;(/ 0.01 current-scale)
+                              (as-node (vec children))))))))
+    
+  
+  (defn sem-test []
+    (let [boxes  (->cloud 1000)
+          bbox   (.getFullBounds boxes)
+          block  (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))
+          ]
+      ;;we can create a node that toggles out at a zoom threshold to a grey box...
+      (render! (->lod-box 0.25 boxes)   )))
+  )
 
 (defn ^PNode ->rotate [theta child]
   (let [theta (double theta)]                   
