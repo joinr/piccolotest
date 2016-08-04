@@ -596,11 +596,19 @@
          (add-child small))))
   ([large small] (->semantic-node large small 1.0)))
 
-(defn ->lod-box [thresh node]
-  (let [contents  (as-node node)
-        bbox      (.getFullBounds contents)
-        block     (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))]
-    (->semantic-node contents block thresh)))
+(defn ->lod-box
+  ([thresh icon node]
+   (let [contents  (as-node node)
+         bbox      (.getFullBounds contents)
+         block     (cond  (keyword? icon)
+                          (->filled-rect icon (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))
+                          (fn? icon)
+                          (icon (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))
+                          :else
+                          (as-node icon))]
+     (->semantic-node contents block thresh)))
+  ([thresh node] (->lod-box thresh :grey node)))
+  
 
 ;;another idea is to use lod to only paint segments of children...
 ;;like....don't paint even children past a threshold....there are
@@ -638,9 +646,7 @@
   ;;  0.16 ^ level
   (defn nested-cloud [n level scale-factor init-scale x y w h]
     (if (zero? level)
-      ;(->lod-box init-scale 
       (->translate x y (->cloud (rand-int n)))
-      ;)
       ;;translate and scale...      
       (let [current-scale (* scale-factor init-scale)
             children (for [[x y] (random-coords w h (rand-int n))]
@@ -651,7 +657,12 @@
                                      x y w h))]
       (->translate x y
          (->scale scale-factor scale-factor
-                  (->lod-box  0.8 ;current-scale ;(/ level init-scale);  current-scale) ;(/ 0.01 current-scale)
+                  (->lod-box  0.8 (fn [x y w h]
+                                    (->circle (java.awt.Color. (int (rand-int 255))
+                                                                  (int (rand-int 255))
+                                                                  (int (rand-int 255)))
+                                                 (+ x (/ w 2.0))
+                                                 (+ y (/ h 2.0))  100 100))
                               (as-node (vec children))))))))
     
   
