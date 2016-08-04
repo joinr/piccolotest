@@ -646,10 +646,10 @@
   ;;  0.16 ^ level
   (defn nested-cloud [n level scale-factor init-scale x y w h]
     (if (zero? level)
-      (->translate x y (->cloud (rand-int n)))
+      (->translate x y (->cloud (max (rand-int n) 1)))
       ;;translate and scale...      
       (let [current-scale (* scale-factor init-scale)
-            children (for [[x y] (random-coords w h (rand-int n))]
+            children (for [[x y] (random-coords w h (max (rand-int n) 1))]
                        (nested-cloud n
                                      (unchecked-dec level)
                                      scale-factor
@@ -658,11 +658,16 @@
       (->translate x y
          (->scale scale-factor scale-factor
                   (->lod-box  0.8 (fn [x y w h]
-                                    (->circle (java.awt.Color. (int (rand-int 255))
-                                                                  (int (rand-int 255))
-                                                                  (int (rand-int 255)))
-                                                 (+ x (/ w 2.0))
-                                                 (+ y (/ h 2.0))  100 100))
+                                    (let [cx (+ x (/ w 2.0))
+                                          cy (+ y (/ h 2.0))]
+                                    (as-node [(->filled-rect (java.awt.Color. (int (rand-int 255))
+                                                                              (int (rand-int 255))
+                                                                              (int (rand-int 255)))
+                                                        cx
+                                                        cy  w h)
+                                              (->translate  cx  (+ cy (/ h 2.0))
+                                                  (->scale 4.0 4.0 (->text  (str "Level : " level))))
+                                              ])))
                               (as-node (vec children))))))))
     
   
