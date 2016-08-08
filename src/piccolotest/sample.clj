@@ -60,6 +60,40 @@
 (defn add-child!  [^PNode p ^PNode c] (doto p (.addChild c)))
 (defn drop-child! [^PNode p ^PNode c] (doto p (.removeChild c)))
 
+(defn ^java.util.ArrayList children! [^PNode p] (.getChildrenReference p))
+(defn empty-list? [^java.util.ArrayList a]
+  (.isEmpty a))
+
+;;pops either the last or the first child....
+;;for stack operations
+(defn first-child! [^PNode p]
+  (let [xs (children! p)]
+    (when-not (empty-list? xs)
+      (.get xs 0))))
+
+(defn last-child!  [^PNode p]
+  (let [xs (children! p)]
+    (when-not (empty-list? xs)
+      (.get xs (unchecked-dec
+                (.size xs))))))
+
+;;stack operations
+(defn pop-child!  [^PNode p]
+  (let [xs (children! p)]
+    (if-not (empty-list? xs)
+      (do   (.remove xs (unchecked-dec
+                         (.size xs)))
+            p)
+      p)))
+
+;;for queue operations
+(defn poll-child! [^PNode p]
+  (let [xs (children! p)]
+    (if-not (empty-list? xs)
+      (do   (.remove xs 0)
+            p)
+      p)))
+
 ;;the problem we're currently having is extending node-like functionality
 ;;to things defined earlier, namely things that extend the
 ;;spork.graphics2d.canvas.IShape protocol.
@@ -112,7 +146,7 @@
 
 (extend-protocol IPiccNode
   org.piccolo2d.PNode
-  (as-node   [nd] nd)
+  (as-node   [nd]       nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
   (as-node   [nd]        (.getRoot ^PCanvas nd))
@@ -434,6 +468,31 @@
       (add-child nd n))
     nd))
 
+
+;;generic pack functions....
+;;try to fit nodes into a geometric space....
+;;Note: we can probably do this via triangulation...
+;;I'm not going that far....I just need something quick and dirty.
+
+;;lets define other versions...
+;;like a node that packs items into a geometric area.
+(defn ^PNode ->container
+  [& nodes]
+  (let [nd 
+        (proxy [org.piccolo2d.PNode] []
+          (layoutChildren [] 
+            (reduce (fn [^double xoffset ^PNode nd]
+                      (let [w (.getWidth (.getFullBoundsReference nd))]              
+                        (.setOffset nd (- xoffset (.getX nd)) 0.0)
+                        (+ xoffset w)))
+                    0.0
+                    (iterator-seq (.getChildrenIterator this)))
+            (proxy-super layoutChildren)))]
+    (doseq [n nodes]
+      (add-child nd n))
+    nd))
+
+
 (defn ^PNode ->spaced-shelf
   [spacing & nodes]
   (let [nd 
@@ -624,13 +683,17 @@
   (defn random-coords [w h n]
     (repeatedly n (fn [] [(rand-int w) (rand-int h)])))
   (defn toggle-rect [big small x y w h]
-    (->semantic-node (->filled-rect big x y w h)
-                     (->filled-rect small x y w h)))
+    (if (identical? big small)
+      (->filled-rect big x y w h)
+      (->semantic-node (->filled-rect big x y w h)
+                       (->filled-rect small x y w h))))
   (defn ->cloud
-    ([w h n]
+    ([n oncolor offcolor w h]
      (as-node (vec (for [[x y] (random-coords w h n)]
-                     (toggle-rect :green :blue x y 10 10)))))
-    ([n] (->cloud 600 600 n)))
+                     (toggle-rect oncolor offcolor x y 10 10)))))
+    ([n color w h]  (->cloud n color color w h))     
+    ([n w h] (->cloud n :green :blue w h))
+    ([n] (->cloud n 600 600)))
   
   ;;nested-clouds....
 
@@ -644,11 +707,18 @@
   ;;  each child is scaled 0.01666 of the parent...
   ;;  so, at a given level, the child's scale is
   ;;  0.16 ^ level
+  (defn random-color [] (java.awt.Color. (int (rand-int 255))
+                                                 (int (rand-int 255))
+                                                 (int (rand-int 255))))
   (defn nested-cloud [n level scale-factor init-scale x y w h]
     (if (zero? level)
-      (->translate x y (->cloud (max (rand-int n) 1)))
+      (->translate x y (->cloud (max (rand-int n) 1) 
+                                (random-color)
+                                (random-color)
+                                w h))
       ;;translate and scale...      
-      (let [current-scale (* scale-factor init-scale)
+       (let [current-scale  (* scale-factor init-scale)
+             parent-color   (random-color)
             children (for [[x y] (random-coords w h (max (rand-int n) 1))]
                        (nested-cloud n
                                      (unchecked-dec level)
@@ -660,9 +730,7 @@
                   (->lod-box  0.8 (fn [x y w h]
                                     (let [cx (+ x (/ w 2.0))
                                           cy (+ y (/ h 2.0))]
-                                    (as-node [(->filled-rect (java.awt.Color. (int (rand-int 255))
-                                                                              (int (rand-int 255))
-                                                                              (int (rand-int 255)))
+                                    (as-node [(->circle parent-color
                                                         cx
                                                         cy  w h)
                                               (->translate  cx  (+ cy (/ h 2.0))

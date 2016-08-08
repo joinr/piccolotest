@@ -172,8 +172,8 @@
                  :or {width 600 height 600 series [:a  :green
                                                    :b  :blue]}}]
   (let [get-color (if-let [gc get-color] gc  (apply hash-map series))
-        sliced (or sliced (= plot-type :area))
-        name (or title "the plot")        
+        sliced    (or sliced (= plot-type :area))
+        name      (or title "the plot")        
         plt  (->dynamic-plot :title    title
                              :xlabel   (or xlabel "x")
                              :ylabel   (or ylabel "y")
@@ -219,6 +219,20 @@
               :width width
               :height height
               :plot-type plot-type
-              :sliced sliced}))))
+              :sliced sliced
+              :wipe  (fn [] (spork.graphics2d.canvas/wipe (:plot plt)))}))))
 
+
+;;trying to implement reset...
+(defn clear-plot! [root]
+  (->>  (p/find-node :plotarea root)
+        (.getParent)
+        (p/node-meta)
+        (:plot)
+        (spork.graphics2d.canvas/wipe)))
+
+;;we can define operations for resizing too....
+;;get dynamically resized plots if our bounds are exceeded...
+;;#TODO
+;;Dynamically resize plots according to data..
 
