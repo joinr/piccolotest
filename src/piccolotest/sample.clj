@@ -160,7 +160,10 @@
   (add-child [nd chld] (do (.addChild (.getLayer ^PSwingCanvas nd) (as-node chld)) nd))
   clojure.lang.PersistentVector
   (as-node [nd]        (reduce add-child (PNode.)  nd))
-  (add-child [nd chld] (conj nd))
+  (add-child [nd chld] (add-child (as-node nd) chld))
+  clojure.lang.LazySeq
+  (as-node [nd]        (reduce add-child (PNode.)  nd))
+  (add-child [nd chld] (add-child (as-node nd) chld))
   javax.swing.JPanel
   (as-node [nd]   (PSwing. nd))
   (add-child [nd child] (add-child (PSwing. nd) child))
@@ -283,6 +286,10 @@
 (defn ^PPath stroke! [^PPath nd ^java.awt.Stroke s]
   (doto nd
     (.setStroke s)))
+
+(defn ^PPath stroke-paint! [^PPath nd  paint]
+  (doto nd
+    (.setStrokePaint (swing/get-gui-color paint))))
 
 ;;I think we want this to be 0.0 for the x coordinate, not 1.0....
 (defn ^PNode uncartesian! [^PNode nd]
@@ -685,15 +692,36 @@
   ([large  small thresh]
    (let [^PNode large (as-node large)
          ^PNode small (as-node small)
+         state (atom :small)         
+         toggle-state (fn toggle-state [newstate]
+                        (do ;(println newstate)
+                             (when (not= newstate @state)
+                              (do 
+                                  (reset! state newstate)
+                                  (case newstate
+                                    :large
+                                    (do (.setVisible small false)
+                                        (.setVisible large true))
+                                    :small
+                                    (do (.setVisible small true)
+                                        (.setVisible large false)
+                                        ))))
+                            newstate))
+         _ (toggle-state :large)
          ;;what about scale/size? 
          nd  (doto (proxy [org.piccolo2d.PNode] []
                      (fullPaint [^org.piccolo2d.util.PPaintContext ppaint]
                        (let [s (.getScale ppaint)]
-                         (if (< s thresh)                    
-                           (.fullPaint small ppaint)
-                           (.fullPaint large ppaint)))))
+                         (let [s (if (< s thresh)
+                                   :small
+                                   :large)
+                               ]
+                           (case (toggle-state s)
+                             :small (.fullPaint small ppaint)
+                             :large (.fullPaint large ppaint))))))
               (.setBounds (.getBounds small)))]
-     (-> nd (add-child  large)
+     (-> nd
+         (add-child  large)
          (add-child small))))
   ([large small] (->semantic-node large small 1.0)))
 
@@ -976,13 +1004,9 @@
     (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
 
 (defn with-input! [nd p]
-  (let [p (cond (map? p)
-                (apply events/event-processor (reduce (fn [acc [k v]]
-                                                        (conj acc k v)) [] (seq p)))
-                (events/event-listener? p) p
-                :else (throw (Exception. (str "unknown input listener type " p))))]
-    (do (.addInputEventListener  ^PNode (as-node nd) ^PInputEventListener p)
-        nd)))
+  (do (.addInputEventListener  ^PNode (as-node nd)
+                               ^PInputEventListener (events/as-listener p))
+        nd))
 
 (defn center-offscreen!
   ([cnv ^PBounds bnds]
@@ -1037,7 +1061,7 @@
                                     (add-child! layer (as-node nd))
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
-      (when handler (.addInputEventListener layer handler))
+      (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
       (show! cnv)))
 
@@ -1052,7 +1076,7 @@
                                     (add-child! layer (as-node nd))
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
-      (when handler (.addInputEventListener layer handler))
+      (when handler (.addInputEventListener layer (events/as-listener handler)))
 ;      (center! cnv)
       (show! cnv)))
 
@@ -1066,7 +1090,7 @@
                                     (add-child! layer (as-node nd))
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
-      (when handler (.addInputEventListener layer handler))
+      (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
       cnv))
 
@@ -1080,15 +1104,49 @@
                                     (add-child! layer (as-node nd))
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
-      (when handler (.addInputEventListener layer handler))
+      (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
       cnv))
+
+(defn strokeable? [nd]  (instance? org.piccolo2d.nodes.PShape nd))
+
+(defn highlight! [nd color]
+  (if (strokeable? nd)
+    (let [^PNode nd     (as-node nd)
+          old-stroke    (.getStroke nd)
+          old-paint     (.getStrokePaint nd)
+          new-stroke    (or old-stroke
+                            (java.awt.BasicStroke.))
+          ]
+      (-> nd
+          (vary-node-meta 
+           assoc :highlighted [old-stroke old-paint])
+          (stroke-paint! color)
+          (stroke! new-stroke)))
+    nd))
+
+(defn un-highlight! [nd]
+  (if (strokeable? nd)
+    (if-let [hinfo (get (node-meta nd)
+                        :highlighted)]
+      (-> nd
+          (vary-node-meta dissoc :highlighted)
+          (stroke-paint! (second hinfo))
+          (stroke! (first hinfo)))
+      nd)
+    nd))
 
 (comment ;testing events
   (defn on-click! [nd f]  (with-input! nd {:mouseClicked  f}))
   (defn on-hover! [nd in out]
     (with-input! nd {:mouseEntered  in
                      :mouseExited   out}))
+
+  (defn highlighter [highlight-color]
+      {:mouseEntered (fn [^PInputEvent e]
+                       (highlight! (.getPickedNode e) highlight-color))                         
+       :mouseExited  (fn [^PInputEvent e]
+                       (un-highlight!  (.getPickedNode e)))})
   
   (defn ->button [color x y w h label action]
     (let [state     (atom :up)          

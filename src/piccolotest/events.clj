@@ -141,6 +141,13 @@
 ;;or use the spork event observer utils to do something
 ;;similar.
 
+(defn ^PInputEventListener as-listener [p]
+  (cond (map? p)
+        (apply event-processor (reduce (fn [acc [k v]]
+                                                (conj acc k v)) [] (seq p)))
+        (event-listener? p) p
+        :else (throw (Exception. (str "unknown input listener type " p)))))
+
 ;;PInputEvents basically take a normal swing InputEvent
 ;;and decorate it with additional information (i.e. node,
 ;;pickpath, etc.)
