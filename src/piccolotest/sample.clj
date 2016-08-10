@@ -5,7 +5,8 @@
             [spork.graphics2d.swing :as swing]
             [spork.graphics2d.font :as font]
             [clojure.core.async :as a
-             :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]])
+             :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]]
+            [piccolotest [events :as events]])
   (:import
    [org.piccolo2d         PCanvas PLayer PNode PRoot POffscreenCanvas PCamera]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
@@ -150,7 +151,7 @@
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
   (as-node   [nd]        (.getRoot ^PCanvas nd))
-  (add-child [nd chld] (do (.addChild (.getLayer nd) (as-node chld)) nd))
+  (add-child [nd chld]   (do (.addChild (.getLayer nd) (as-node chld)) nd))
   org.piccolo2d.POffscreenCanvas
   (as-node   [nd]        (.getRoot ^POffscreenCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer ^PCamera (.getCamera nd) 0) (as-node chld)) nd))  
@@ -166,8 +167,7 @@
   javax.swing.JComponent
   (as-node [nd]   (PSwing. nd))
   (add-child [nd child] (add-child (PSwing. nd) child)))
-                    
-
+                   
 (defn ->cache [child]
   (let [c (PNodeCache.)
         ]
@@ -196,7 +196,11 @@
 (defprotocol MetaNode
   (node-meta [nd])
   (with-node-meta [nd m]))
-                       
+
+(defn vary-node-meta [nd f & args]
+  (with-node-meta nd
+    (apply f (node-meta nd) args)))
+
 (extend-type org.piccolo2d.PNode
   MetaNode
   (node-meta [obj]         (.getAttribute obj "meta"))
@@ -288,9 +292,11 @@
         (scale! 1.0 -1.0))))
 ;(defn ^PNode scale! [^PNode nd ^double x ^double y] (doto nd (.scale x y)))
 
+(defn leaf?     [nd]
+  (pos? (.getChildrenCount ^PNode (as-node nd))))
 
-(defn node-children [^PNode nd]
-  (iterator-seq (.getChildrenIterator nd)))
+(defn node-children [nd]
+  (iterator-seq (.getChildrenIterator (as-node ^PNode nd))))
 
 ;;Search through the node meta data for ids
 (defn find-node [id ^PNode root]
@@ -302,10 +308,27 @@
                     acc)) nil
                     (node-children root)))))
 
+;;note: tree-seq flattens out our nodes in a depth-first order.
+;;If we want to show containment, we need to walk the nodes iteratively.
 (defn node-seq [^PNode root]
-  (tree-seq (fn [nd] (pos? (.getChildrenCount ^PNode nd)) )
-            node-children root))
-    
+  (tree-seq leaf? node-children root))
+
+;;It'd be nice to have a visual representation of the scene that we can mess with, explore, etc.
+;;Something like smalltalk's object explorer...
+;;this is really the scene-graph.
+;; (defn node-tree [^PNode root]
+;;   (if (leaf? root)
+;;     (let [nm (node-meta nd)]
+;;       {(or (:id nm) (str "leaf" )
+;;        (clojure.lang.MapEntry. (node-meta nd) nd)})
+;;     (let [nm (node-meta nd)]
+;;       {(or (:id nm) :branch)
+;;        (lazy-seq
+;;         (map node-tree
+          
+;;   (tree-seq leaf?
+;;             node-children root))  
+        
 
 (defn node-map [^PNode nd]
   (into {}
@@ -313,6 +336,25 @@
                   l)
                 (for [nd (node-seq nd)]
                   [(node-meta nd) nd]))))
+
+
+;;cameras give us additional views...
+(defn ^org.piccolo2d.PCamera ->camera []
+  (org.piccolo2d.PCamera.))
+
+;;a sub-scene creates three things:
+;;a camera
+;;a layer
+;;
+(defn ->sub-scene [])
+
+;;we'd like to create multiple "panes" or picture-in-picture
+;;views....
+(defn ->sub-view  [])
+
+;;we should be able to create a simple object explorer here...
+;;Since we've coded a bunch of stuff...
+;;We should be able to show a treemap or something like it...
 
 (defn ^PNode ->rect
   ([color x y w h meta]
@@ -932,6 +974,16 @@
   [cnv]
   (doto (.. cnv getCamera)
     (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
+
+(defn with-input! [nd p]
+  (let [p (cond (map? p)
+                (apply events/event-processor (reduce (fn [acc [k v]]
+                                                        (conj acc k v)) [] (seq p)))
+                (events/event-listener? p) p
+                :else (throw (Exception. (str "unknown input listener type " p))))]
+    (do (.addInputEventListener  ^PNode (as-node nd) ^PInputEventListener p)
+        nd)))
+
 (defn center-offscreen!
   ([cnv ^PBounds bnds]
    (doto (.. cnv getCamera)
@@ -1031,3 +1083,103 @@
       (when handler (.addInputEventListener layer handler))
       (center! cnv)
       cnv))
+
+(comment ;testing events
+  (defn on-click! [nd f]  (with-input! nd {:mouseClicked  f}))
+  (defn on-hover! [nd in out]
+    (with-input! nd {:mouseEntered  in
+                     :mouseExited   out}))
+  
+  (defn ->button [color x y w h label action]
+    (let [state     (atom :up)          
+          expanded  (as-node (->cartesian [(->filled-rect color x y w h)
+                                           (->translate x y (->text label))]))]
+      (on-click! expanded action)))
+  
+  (defn random-square [x y w h]
+    (->filled-rect (java.awt.Color. (rand-int 255) (rand-int 255) (rand-int 255))
+                   x y w h))
+  (defn random-squares [n w h]    
+    (for [i (range n)]
+      (random-square (* (rand) w) (* (rand) h) 50 50)))
+  ;;note: this only works for node events.  If they're children,
+  ;;the parent's never forward events to them.
+  (defn ->hover-toggle [^PNode open ^PNode closed]
+    (let [prior (atom nil)
+          ep    (events/event-processor
+                 :mouseEntered  (fn [e]
+                                  (.setVisible open true)
+                                  (.setVisible closed false)
+                                  )
+                 :mouseExited   (fn [e]
+                                  (.setVisible open false)
+                                  (.setVisible closed true)))
+      _ (.setVisible closed false)]
+      (doto (as-node [open closed])
+        (.addInputEventListener ep))))
+  
+  (defn ->highlight-on-hover [color nd]
+    (let [bnds (.getBounds nd)
+          high (->rect color (.getX bnds) (.getY bnds) (.getWidth bnds) (.getHeight bnds))
+          _    (.setVisible high false)
+          ep   (events/event-processor
+                 :mouseEntered  (fn [e]
+                                  (.setVisible high true)
+                                  )
+                 :mouseExited   (fn [e]
+                                   (.setVisible high false)
+                                   ))]
+      (doto (as-node [nd high])
+        (.addInputEventListener ep))))
+       
+    (defn ->click-toggle [^PNode open ^PNode closed]
+      (let [prior (atom true)
+            ep    (events/event-processor
+                   :mouseClicked  (fn [e]
+                                    (swap! prior not)
+                                    (.setVisible open @prior)
+                                    (.setVisible closed (not @prior))
+                                    ))
+            _ (.setVisible closed false)]
+        (doto (as-node [open closed])
+          (.addInputEventListener ep))))
+          
+  (defn ->color-toggle [color nd]
+    (let [prior (atom nil)
+          ep (events/event-processor
+              :mouseEntered  (fn [e]
+                               (reset! prior (.getPaint nd))
+                               (set-paint! nd color))
+              :mouseExited   (fn [e]
+                               (set-paint! nd @prior)))]
+      (doto nd (.addInputEventListener ep))))
+
+  (defn annotation [anno-node nd]
+    (let [
+          prior (atom nil)
+          ep (events/event-processor
+              :mouseEntered  (fn [e]
+                               (reset! prior (.getPaint nd))
+                               (set-paint! nd color))
+              :mouseExited   (fn [e]
+                               (set-paint! nd @prior)))]
+      (doto nd (.addInputEventListener ep))))
+
+  ;;so now we can interact...
+  
+;  (defn highlight! [border nd]
+;    (let [bnds (.getBounds nd)
+    
+    (defn ->print-toggle [nd]
+      (let [prior (atom nil)
+            ep (events/event-processor
+                :mouseEntered  (fn [e]                               
+                                 (println "entered!")
+                                 )
+                :mouseExited   (fn [e]
+                               (println "Exited!"
+                                        ))
+                :mouseMoved (fn [e] nil))]
+        (doto nd (.addInputEventListener ep))))
+    
+            
