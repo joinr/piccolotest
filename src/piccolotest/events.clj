@@ -148,7 +148,7 @@
         (event-listener? p) p
         (fn? p)        (reify org.piccolo2d.event.PInputEventListener        
                          (^void processEvent  [this ^PInputEvent event ^int event-type]
-                           (f event)))
+                           (p event)))
         (vector? p)    (let [handlers (map as-listener p)]
                          (reify org.piccolo2d.event.PInputEventListener        
                            (^void processEvent  [this ^PInputEvent event ^int event-type]

@@ -276,6 +276,14 @@
                     (.translate (double x) (double (if *cartesian* (- y) y))))]
     (doto nd (.setTransform trans))))
 
+;;Imported from quilsample experiments.
+;;This is more sophisticated than the animated-board, we may
+;;want to retrofit the AB as a map-board.
+(defn shift-node! [^org.piccolo2d.PNode nd ^double x ^double y]
+  (do (translate nd x y) 
+      (.invalidatePaint nd)
+      nd))
+
 (defn ^PNode scale! [^PNode nd  xscale yscale]
   (let [xscale  (double xscale)
         yscale  (double yscale)
@@ -461,6 +469,38 @@
           (.setPaint (swing/get-gui-color color)))
         (with-node-meta meta)))
   ([color x y w h] (->circle color x y w h {})))
+
+;;Creates a grouped node with simple grid-lines overlaying
+;;the node.  Probably should create a simple ->grid node
+;;type.  This will subdivide the node boundaries into
+;;a 10x10 grid
+(defn ->grid-lines
+  [^org.piccolo2d.PNode nd]
+   (let [bounds (.getFullBounds nd)
+         height (.getHeight bounds)
+         width  (.getWidth bounds)
+         x      (.getX bounds)
+         y      (.getY bounds)
+         vstep  (/ height 10.0)
+         hstep  (/ width  10.0)]
+     (into [nd]
+           (concat 
+            (for [n (range 11)]
+              (->line :black x (+ y (* n vstep)) width (+ y (* n vstep))))
+            (for [n (range 11)]
+              (->line :black (+ x (* n hstep)) y  (+ x (* n hstep)) height ))))))
+
+;;Adds a colored rectangle as a background for the node.
+;;Should this be an image?  Should we just alter the node's
+;;color property?
+(defn ->background [clr nd]
+  (let [bounds (.getFullBounds nd)
+        height (.getHeight bounds)
+        width  (.getWidth bounds)
+        x      (.getX bounds)
+        y      (.getY bounds)]
+    [(->filled-rect clr x y width height)
+     nd]))
 
 ;;images are shape stacks, so we can draw onto them.
 (extend-type org.piccolo2d.nodes.PImage
@@ -1247,5 +1287,7 @@
                                         ))
                 :mouseMoved (fn [e] nil))]
         (doto nd (.addInputEventListener ep))))
+
+    )
     
             
