@@ -19,6 +19,9 @@
   (tokens     [b])
   (places     [b]))
 
+(defprotocol IParametric
+  (time-reference [obj]))
+
 ;;can we merge these two?
 ;;Can we use a gis as an animated board?
 ;;Should be able to easily....
