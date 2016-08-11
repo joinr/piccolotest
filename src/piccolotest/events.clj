@@ -146,6 +146,14 @@
         (apply event-processor (reduce (fn [acc [k v]]
                                                 (conj acc k v)) [] (seq p)))
         (event-listener? p) p
+        (fn? p)        (reify org.piccolo2d.event.PInputEventListener        
+                         (^void processEvent  [this ^PInputEvent event ^int event-type]
+                           (f event)))
+        (vector? p)    (let [handlers (map as-listener p)]
+                         (reify org.piccolo2d.event.PInputEventListener        
+                           (^void processEvent  [this ^PInputEvent event ^int event-type]
+                             (doseq [^PInputEventListener h handlers]
+                               (.processEvent h event event-type)))))
         :else (throw (Exception. (str "unknown input listener type " p)))))
 
 ;;PInputEvents basically take a normal swing InputEvent

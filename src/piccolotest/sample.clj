@@ -1063,7 +1063,7 @@
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
-      (show! cnv)))
+      (show!   cnv)))
 
 
 (defn render-raw!  [nd & {:keys [transform background handler]}]
@@ -1136,17 +1136,25 @@
       nd)
     nd))
 
+(defn highlighter [highlight-color]
+  {:mouseEntered (fn [^PInputEvent e]
+                   (highlight! (.getPickedNode e) highlight-color))                         
+   :mouseExited  (fn [^PInputEvent e]
+                   (un-highlight!  (.getPickedNode e)))})
+
+(defn annotater [node->annotation]
+  {:mouseEntered (fn [^PInputEvent e]
+                   (node->annotation (.getPickedNode e)))                         
+   :mouseExited  (fn [^PInputEvent e]
+                   (node->annotation  (.getPickedNode e)))})
+
 (comment ;testing events
   (defn on-click! [nd f]  (with-input! nd {:mouseClicked  f}))
   (defn on-hover! [nd in out]
     (with-input! nd {:mouseEntered  in
                      :mouseExited   out}))
+     
 
-  (defn highlighter [highlight-color]
-      {:mouseEntered (fn [^PInputEvent e]
-                       (highlight! (.getPickedNode e) highlight-color))                         
-       :mouseExited  (fn [^PInputEvent e]
-                       (un-highlight!  (.getPickedNode e)))})
   
   (defn ->button [color x y w h label action]
     (let [state     (atom :up)          
