@@ -7,7 +7,6 @@
 ;;Another option is to just maintain a list of coordinate->color.
 ;;If it's encoded via bytes, we should be able to keep millions in memory.
 
-
 ;;Note:
 ;;We can encode trails by having a limited color set.
 ;;At any given point in time, we have a set of coordinates,
@@ -72,7 +71,6 @@
 ;;it may be sufficient to simply extend the animated-board protocol to facilitate the
 ;;map's functionality.
 
-
 ;;__Animated Board Node__
 ;;An animated board is a data structure that maps entity names
 ;;to piccolo2d nodes, and maintains a piccolo2d root layer.
@@ -105,7 +103,6 @@
   (deref [obj] {:node-map node-map :board-layer board-layer}))
 
 (def empty-board (animated-board. {} nil))
-
 
 ;;__Animated Board Node__
 ;;An animated board is a data structure that maps entity names

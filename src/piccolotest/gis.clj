@@ -3,7 +3,8 @@
 ;;Serves as the basis for multiple node types,
 ;;including surfaces..
 (ns piccolotest.gis
-  (:require [piccolotest [sample :as    picc]]
+  (:require [piccolotest [sample :as    picc]
+                         [timers :as t]]
             [clojure.core.async :as async :refer [ >!! <!! >! <!]]))
 
 ;;possibly subsume the IBoard implementations with this guy.
@@ -124,7 +125,9 @@
   (:points (picc/node-meta  (arc-between nodes from to :black))))
 
 (defn path-length [xs]
-  (reduce + (map (fn [[l r]] (apply picc/norm (picc/dist l r))) (partition 2 1 xs))))
+  (reduce + (map (fn [[l r]]
+                   (apply picc/norm (picc/dist l r)))
+                 (partition 2 1 xs))))
 
 (defn get-length
   [nodes from to]
@@ -147,6 +150,128 @@
   [(+ x (* (rand) 10))
    (+ y (* (rand) 10))])
 
+;;Parametric Transitions (WIP)
+;;============================
+;;A fading arc is an example of an activity...
+;;If we can lock down the PActivities so that we can
+;;control them with channels/discrete time, that'd be nice.
+(defn fading-arc [time-atom parent duration nodes from to color]
+  (let [arc   (arc-between nodes from to color)
+        alpha (atom 1.0)
+        step  (/ 1.0 duration)
+        t     @time-atom
+        end-time (+ duration t)
+        nd    (picc/->fade alpha arc)
+        c     (async/chan 1)
+        _     (picc/do-scene
+               (picc/add-child parent nd)
+               (t/add-timer time-atom duration (gensym "fade")
+                            (fn [t]
+                              (if (< t end-time)                                    
+                                (swap! alpha (fn [x] (max (- x step) 0.0)))
+                                        ;(picc/drop-child! parent nd)
+                                (when (async/put! c true)
+                                  (do ;(picc/set-visible! nd false)
+                                    (async/close! c))                                        
+                                  )
+                                
+                                ))))  
+        _     (async/go
+                (let [res (<! c)]
+                  (picc/do-scene
+                   (picc/drop-child! parent nd)                 
+                   )
+                  ))
+        ]
+    nd))
+
+;;Might want to shift to an activity-based implementation later.
+;;change this to a channel-based implementation.
+;;get away from timers.
+;;We're using invoke-later to ensure work is done on the swing EDT thread..
+;;for both adding and removing arcs.  Still getting the odd null pointer
+;;exception, dunno why, but I think we're okay.
+
+;;we need to be able to cancel the send.
+;;running into situations where we're changing
+;;a unit's transit en-route.  What does it mean to
+;;cancel?
+;;Alter the path.
+;;note: send-to depends on events.
+(defn send-to
+  "Send an icon - from - towards destination - to - using a provided speed.  Allows us 
+   to also show the path of travel using an arc (or line).  We could also provide 
+   an arg to set the stroke.  For now, we use solid arcs."
+  [time-atom nodes from to & {:keys [speed arc? cancel? duration noise]
+                    :or {speed 16 arc? true}}]
+  (let [^org.piccolo2d.PNode from           (get-node nodes from)
+        ;;allows us to provide a jitter factor.
+        to         (if noise
+                     (let [nd (get-node nodes to)]
+                       (->> (get-node nodes to)
+                            (get-coords nodes)
+                            (jitter-by noise)))
+                     to)
+        the-path     (get-path nodes from to)
+       
+        t        @time-atom
+        dist     (get-length nodes from to)
+        speed    (if duration  (/  dist duration) speed)
+        duration (or duration (/ dist speed)) ;;we could make duration an atom and let timer watch.
+        end-time (+ duration t)
+        step         (picc/follow-path!  from
+                                         the-path
+                                         speed
+                                         shift-to!) 
+        res      (async/chan (async/dropping-buffer 1)) ;ensure we don't have a problem.
+        ;;maybe use channels here instead.
+        send-nm (gensym "send")
+        _       (t/add-timer time-atom (inc duration) send-nm
+                             (if cancel?
+                               (fn [t]
+                                 (if (cancel?)
+                                   (do 
+                                     (async/put! res t)
+                                     (async/close! res))
+                                   (if-let [nxt (picc/do-scene (step  1))]
+                                     nil
+                                     (do 
+                                       (async/put! res t)
+                                       (async/close! res)))))
+                               (fn [t]
+                                 (if-let [nxt (picc/do-scene (step  1))]
+                                   nil
+                                   (do 
+                                     (async/put! res t)
+                                     (async/close! res))))))                             
+        _  (when arc?
+             (picc/do-scene
+              (fading-arc time-atom (.getParent  from)
+                          duration nodes from to :red)))
+        ]
+    res))
+
+;;We can define tours, i.e. animated paths that a unit will travel at speed.
+;;We may want to define speed as a function too..
+(defn circuit [time-atom nodes from targets & {:keys [speed arc?] :or {speed 16 arc? true}}]
+  (let [c (async/chan 100)]
+    (async/go-loop [remaining targets]
+      (if (seq remaining)
+        (let [tgt  (first remaining)]
+              (if-let [res (try (send-to time-atom nodes from tgt :speed speed :arc? arc?)
+                            (catch Exception e
+                              (do ;(async/>! errchan e)
+                                  nil)))]
+                (let [x (async/<! res)
+                      _  (async/close! res)]
+                  (do (async/put! c [tgt x]) ;await the movement
+                      (recur (rest remaining))))
+                (async/close! c)))
+        (async/close! c)))
+    c))
+
+;;Tokens
+;;======
 ;;Simple primitive tokens for placing things on the map.
 
 ;;push the icon along the points dictated by the path in the arc.
@@ -227,128 +352,3 @@
       (reduce (fn [b [k nd]]
                 (add-place b k nd)) brd places))))
 
-;;Parametric Transitions (WIP)
-;;============================
-;;A fading arc is an example of an activity...
-;;If we can lock down the PActivities so that we can
-;;control them with
-
-;;Might want to shift to an activity-based implementation later.
-;;change this to a channel-based implementation.
-;;get away from timers.
-;;We're using invoke-later to ensure work is done on the swing EDT thread..
-;;for both adding and removing arcs.  Still getting the odd null pointer
-;;exception, dunno why, but I think we're okay.
-(comment 
-(defn fading-arc ;[parent duration nodes from to color & {:keys [yscale yoffset]
-                  ;                                :or {yscale +us-yscale+
-                   ;                                    yoffset +us-y+}}]
-  [parent duration nodes from to color]
-  (let [arc   ;(arc-between nodes from to color :yscale yscale :yoffset yoffset)
-              (gis/arc-between nodes from to color)
-        alpha (atom 1.0)
-        step  (/ 1.0 duration)
-        t     @events/global-time
-        end-time (+ duration t)
-        nd    (picc/->fade alpha arc)
-        c     (async/chan 1)
-        _     (picc/do-scene
-                 (picc/add-child parent nd)
-                 (events/add-timer duration (gensym "fade")
-                     (fn [t]
-                       (if (< t end-time)                                    
-                         (swap! alpha (fn [x] (max (- x step) 0.0)))
-                                        ;(picc/drop-child! parent nd)
-                         (when (async/put! c true)
-                           (do ;(picc/set-visible! nd false)
-                             (async/close! c))                                        
-                           )
-                         
-                         ))))  
-        _     (async/go
-                (let [res (<! c)]
-                  (picc/do-scene
-                   (picc/drop-child! parent nd)                 
-                   )
-                   ))
-        ]
-    nd))
-
-;;we need to be able to cancel the send.
-;;running into situations where we're changing
-;;a unit's transit en-route.  What does it mean to
-;;cancel?
-;;Alter the path.
-;;note: send-to depends on events.
-(defn send-to
-  "Send an icon - from - towards destination - to - using a provided speed.  Allows us 
-   to also show the path of travel using an arc (or line).  We could also provide 
-   an arg to set the stroke.  For now, we use solid arcs."
-  [nodes from to & {:keys [speed arc? cancel? duration noise]
-                    :or {speed 16 arc? true}}]
-  (let [^org.piccolo2d.PNode from           (get-node nodes from)
-        ;;allows us to provide a jitter factor.
-        to         (if noise
-                     (let [nd (get-node nodes to)]
-                       (->> (get-node nodes to)
-                            (get-coords nodes)
-                            (jitter-by noise)))
-                     to)
-        the-path     (get-path nodes from to)
-       
-        t        @events/global-time
-        dist     (get-length nodes from to)
-        speed    (if duration  (/  dist duration) speed)
-        duration (or duration (/ dist speed)) ;;we could make duration an atom and let timer watch.
-        end-time (+ duration t)
-        step         (picc/follow-path!  from
-                                         the-path
-                                         speed
-                                         shift-to!) 
-        res      (async/chan (async/dropping-buffer 1)) ;ensure we don't have a problem.
-        ;;maybe use channels here instead.
-        send-nm (gensym "send")
-        _       (events/add-timer (inc duration) send-nm
-                                  (if cancel?
-                                    (fn [t]
-                                      (if (cancel?)
-                                          (do 
-                                            (async/put! res t)
-                                            (async/close! res))
-                                          (if-let [nxt (picc/do-scene (step  1))]
-                                            nil
-                                            (do 
-                                              (async/put! res t)
-                                              (async/close! res)))))
-                                    (fn [t]
-                                      (if-let [nxt (picc/do-scene (step  1))]
-                                        nil
-                                        (do 
-                                          (async/put! res t)
-                                          (async/close! res))))))                             
-        _  (when arc?
-             (picc/do-scene
-              (fading-arc (.getParent  from)
-                          duration nodes from to :red)))
-        ]
-    res))
-
-;;We can define tours, i.e. animated paths that a unit will travel at speed.
-;;We may want to define speed as a function too..
-(defn circuit [nodes from targets & {:keys [speed arc?] :or {speed 16 arc? true}}]
-  (let [c (async/chan 100)]
-    (async/go-loop [remaining targets]
-      (if (seq remaining)
-        (let [tgt  (first remaining)]
-              (if-let [res (try (send-to nodes from tgt :speed speed :arc? arc?)
-                            (catch Exception e
-                              (do (async/>! errchan e)
-                                  nil)))]
-                (let [x (async/<! res)
-                      _  (async/close! res)]
-                  (do (async/put! c [tgt x]) ;await the movement
-                      (recur (rest remaining))))
-                (async/close! c)))
-        (async/close! c)))
-    c))
-)
