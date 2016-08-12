@@ -1150,8 +1150,7 @@
 
 (defn strokeable? [nd]  (instance? org.piccolo2d.nodes.PShape nd))
 
-(defn highlight! [nd color]
-  (if (strokeable? nd)
+(defn highlight-stroke! [nd color]
     (let [^PNode nd     (as-node nd)
           old-stroke    (.getStroke nd)
           old-paint     (.getStrokePaint nd)
@@ -1162,19 +1161,52 @@
           (vary-node-meta 
            assoc :highlighted [old-stroke old-paint])
           (stroke-paint! color)
-          (stroke! new-stroke)))
-    nd))
+          (stroke! new-stroke))))
 
-(defn un-highlight! [nd]
-  (if (strokeable? nd)
-    (if-let [hinfo (get (node-meta nd)
+(defn unhighlight-stroke! [nd]
+   (if-let [hinfo (get (node-meta nd)
                         :highlighted)]
       (-> nd
           (vary-node-meta dissoc :highlighted)
           (stroke-paint! (second hinfo))
           (stroke! (first hinfo)))
-      nd)
-    nd))
+      nd))
+
+(defn ->bounds-rect [color nd]
+  (let [^PNode nd (as-node nd)
+        bounds (.getFullBounds nd)]
+    (->rect color (.getX bounds) (.getY bounds)
+            (.getWidth bounds) (.getHeight bounds))))
+
+(defn highlight-bounds! [nd color]
+  (let [hbounds       (->bounds-rect color nd)
+          ]
+      (-> nd
+          (vary-node-meta 
+           assoc :highlighted hbounds)
+          (add-child hbounds))))
+
+(defn unhighlight-bounds! [nd]
+   (if-let [hinfo (get (node-meta nd)
+                        :highlighted)]
+      (-> nd
+          (vary-node-meta dissoc :highlighted)
+          (drop-child! hinfo)
+          )
+      nd))
+
+(defn highlight! [nd color]
+  (if (strokeable? nd)
+    (highlight-stroke! nd color)
+    (highlight-bounds! nd color)))
+
+(defn un-highlight! [nd]
+    (if-let [hinfo (get (node-meta nd)
+                        :highlighted)]
+      (if (strokeable? nd)        
+        (unhighlight-stroke! nd)
+        (unhighlight-bounds! nd))
+      nd))
 
 (defn highlighter [highlight-color]
   {:mouseEntered (fn [^PInputEvent e]
