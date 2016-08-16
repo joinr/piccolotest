@@ -19,8 +19,51 @@
 ;;things like channels.
 
 ;;we could split this up into channels, but we'll keep with
-;;piccolo conventions for now...It'd be nice to dispace
+;;piccolo conventions for now...It'd be nice to dispatch
 ;;events based on type though.
+
+
+;;One thing that's still an issue is how we manage time in piccolo.
+;;Currently, we have a canvas integrated with swing that
+;;renders things...
+
+;;Input comes in the form of swing events, normally InputEvents,
+;;and is mapped onto a stream of PInputEvents like so:
+
+;;UserIO -> Swing -> InputEvents -> PInputEvents
+;;These events are then handled by the PInputManager
+;;associated with a PRoot node.
+
+;;Handle :: [PInputEvent] -> PInputManager -> Scene -> Scene
+
+;;It'd be nice to open up the event processing streams...
+;;To facilitate piping arbitrary events into piccolo
+;;  akin to using the java robot, for scripting user
+;;  interactions and "movies"
+
+;;Additionally, we'd like to have a "hook" on the EDT
+;;thread that lets us do work on the scene.
+;;Rather than queuing everything up for dispatch on the
+;;edt thread, we could provide an event handler that
+;;looks at pending tasks and runs them (more or
+;;less identical to queuing on the EDT thread).
+
+;;From here, rather than using a time-step based update
+;;model, as piccolo currently does, we shift to an
+;;event-driven view of time.  So we can synchronize
+;;the global time to an arbitrary reference that's
+;;updated outside of piccolo.  Currently, piccolo
+;;uses System/currentTimeMillis to work.
+
+;;Another option is to extend the PCanvas class and
+;;override getTime as we see fit.
+
+;;A PCanvas is a swing component that owns a piccolo scene,
+;;and pipes swing input into the scene via a special handle
+;;to a camera (the canvas camera).  So, events are pushed onto
+;;the scene via the canvas camera, the camera's paint function
+;;is the paintComponent for the canvas.
+
 
 (defn event-listener? [obj]
   (instance? org.piccolo2d.event.PInputEventListener obj))
@@ -176,4 +219,6 @@
 ;;               (processEvent [this event t]
 ;;                             (f event t)))]
 ;;      (doto nd (.addInputEventListener ^PInputEventListener eh)))))
+
+
 

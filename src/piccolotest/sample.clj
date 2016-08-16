@@ -616,7 +616,12 @@
 ;;       (add-child nd n))
 ;;     nd))
 
+
+;;This is a bit off...
 ;;rewrite using our node transforms.
+;;One option is to enforce layout constraints...
+;;another option is to use translation nodes to
+;;do our dirty work.
 (defn ^PNode ->stack
   [& nodes]
   (let [nd 
@@ -633,6 +638,8 @@
     (doseq [n nodes]
       (add-child nd n))
     nd))
+
+
 
 (defn ^PNode ->spaced-stack
   [spacing & nodes]
@@ -1175,9 +1182,11 @@
 (defn ->bounds-rect [color nd]
   (let [^PNode nd (as-node nd)
         bounds (.getFullBounds nd)]
-    (->rect color (.getX bounds) (.getY bounds)
+    (->rect color 0.0 0.0
             (.getWidth bounds) (.getHeight bounds))))
 
+;;Problem is, if we add the child, we get the parent transforms
+;;applied...
 (defn highlight-bounds! [nd color]
   (let [hbounds       (->bounds-rect color nd)
           ]
@@ -1320,6 +1329,9 @@
                 :mouseMoved (fn [e] nil))]
         (doto nd (.addInputEventListener ep))))
 
+
+    ;;Testing to correct layout problems with shelf and stack.
+    
     )
     
             

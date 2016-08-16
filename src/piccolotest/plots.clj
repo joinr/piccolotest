@@ -236,3 +236,18 @@
 ;;#TODO
 ;;Dynamically resize plots according to data..
 
+
+(comment
+ ;;testing layout functions and stuff.. Trying to fix
+ ;;node picking, which seems to be erroneous.
+ (->dynamic-plot :title    "helloa"
+                             :xlabel   "x"
+                             :ylabel   "y"
+                             :height    600
+                             :width     600
+                             :get-color (fn [_] :red)
+                             :name "The-plot"
+                             :xmax 600
+                             :ymax 600)
+
+  )
