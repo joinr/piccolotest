@@ -16,7 +16,8 @@
    [org.piccolo2d.extras.event
     PSelectionEventHandler
     PNotification
-    PNotificationCenter]
+    PNotificationCenter
+    PNavigationEventHandler]
    [org.piccolo2d.activities    PActivity]
    [org.piccolo2d.extras.pswing PSwing PSwingCanvas]
    [org.piccolo2d.extras.swing SwingLayoutNode]
@@ -554,7 +555,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (add-child nd n))
+      (add-child nd (as-node n)))
     nd))
 
 
@@ -578,7 +579,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (add-child nd n))
+      (add-child nd (as-node n)))
     nd))
 
 
@@ -595,7 +596,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (add-child nd n))
+      (add-child nd (as-node n)))
     nd))
 
 ;;like shelf, except it aligns children by
@@ -636,7 +637,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (add-child nd n))
+      (add-child nd (as-node n)))
     nd))
 
 
@@ -655,7 +656,7 @@
                     (iterator-seq (.getChildrenIterator this)))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
-      (add-child nd n))
+      (add-child nd (as-node n)))
     nd))
 
 
@@ -665,7 +666,7 @@
         trans (doto (AffineTransform.)
                     (.translate (double x) (double y)))
         nd  (doto (PNode.) (.setTransform trans))]
-     (add-child nd child)))
+     (add-child nd (as-node child))))
 
 (defn ^PNode ->scale [xscale yscale child]
   (let [xscale  (double xscale)
@@ -675,7 +676,7 @@
         nd  (doto (PNode.)
               (.setTransform trans))
         ]
-    (add-child nd child)))
+    (add-child nd (as-node child))))
 
 (defn ->scaled-image [img xscale yscale & {:keys [id]}]
   (with-node-meta  
@@ -720,7 +721,7 @@
                                          (invalidate! ^PNode nd))))
         ;     )
              )]
-    (add-child  nd child)))
+    (add-child  nd (as-node child))))
 
 ;;We want to define a level-of-detail node...
 ;;specifically, nodes that change their detail/meaning
@@ -1011,7 +1012,7 @@
           
 ;;general transform node.
 (defn ^PNode ->transform [^java.awt.geom.AffineTransform xform child]
-  (add-child (doto (PNode.) (.setTransform xform)) child))
+  (add-child (doto (PNode.) (.setTransform xform)) (as-node child)))
 
 ;;In this sense, the piccolo scenegraph is no different from
 ;;the existing hud (it's not being interacted with the user).
@@ -1096,13 +1097,22 @@
           width  (.getWidth  c)
           height (.getHeight c)]
       (spork.protocols.spatial/bbox x y  width height))))
-           
+
+(defn swing? [nd]
+  (instance? org.piccolo2d.extras.pswing.PSwing nd))
+(defn has-swing? [x]
+  (some swing?  (node-seq (as-node x))))
+                 
 ;;animate entities...
-(defn render!  [nd & {:keys [transform background handler]}]
-    (let  [cnv (doto (->canvas)
-                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom?]}]
+  (let  [cnv   (doto (if (has-swing? nd)
+                       (->swing-canvas)
+                       (->canvas))
+                   (.setPreferredSize (java.awt.Dimension. 600 600)))
+           _     (when clear-pan?  (.removeInputEventListener cnv (.getPanEventHandler cnv)))
+           _     (when clear-zoom? (.removeInputEventListener cnv (.getZoomEventHandler cnv)))
            layer (.getLayer cnv)
-           _     (when transform (.setTransform layer transform))
+           _     (when transform  (.setTransform layer transform))
            _     (when background (if (or (node? background)
                                           (satisfies? IPiccNode background))
                                     (add-child! layer (as-node nd))
@@ -1111,7 +1121,6 @@
       (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
       (show!   cnv)))
-
 
 (defn render-raw!  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
@@ -1224,10 +1233,108 @@
                    (un-highlight!  (.getPickedNode e)))})
 
 (defn annotater [node->annotation]
-  {:mouseEntered (fn [^PInputEvent e]
-                   (node->annotation (.getPickedNode e)))                         
+  {:mouseEntered (fn [e] (node->annotation (events/picked-node e)))
    :mouseExited  (fn [^PInputEvent e]
                    (node->annotation  (.getPickedNode e)))})
+
+;;We'd like to have an entity properties frame setup...
+;;Should we have a jtree or just embed the piccolo canvas inside
+;;a frame?
+
+;;A property-box is just a scrollable grid of properties.
+;;hmmm.....we need an input stream of information to display
+;;Simplest is a text property.  If we include a simple function
+;;to grab the node properties, then we can establish a mutable
+;;map binding that we can observe.  Maybe wire up event listeners
+;;to the node so that when the property changes, we notify the
+;;property box.  Alternate idea is to use an existing control
+;;like gridbox or something.
+;;We could start with a simple idea...
+;;Define a node that has an atom in its meta.
+;;Put a watch on the atom that fires an event
+;;on a listener on the node.  So, say we bind
+;;text to the node...
+
+;;For now, just use an atom...maybe use
+;;channels later.  Looks a lot like a transducer.
+;;So, this lets us bind stuff to the nodes.....
+;;Alternate idea is to assoc a property listener with
+;;the node.
+(defn map-node [nd ref xform]
+  (let [on-change (fn changed [k r old new]
+                    (do-scene
+                     (xform nd old new)))
+        _          (add-watch ref :map-node  on-change)
+        ]    
+    nd
+    ))
+
+;;so
+
+;;wheel-zooming...
+
+;;wads controls (fps) for panning.
+(defn center-on!
+  ([^PCamera cam ^PNode nd ^long zoomtime]  
+   (.animateViewToCenterBounds cam (.getFullBounds nd) true zoomtime))
+  ([cam nd] (center-on! cam nd 0)))
+
+(defn center-xform!
+  ([^PCamera cam ^PNode nd ^long zoomtime]  
+   (.animateViewToTransform cam (.getGlobalTransform nd) true zoomtime))
+  ([cam nd] (center-on! cam nd 0)))
+
+;;This kinda works...more useful for simple zooming...
+(defn with-navigation [nd]
+  (doto ^PNode (as-node nd)
+        (.addInputEventListener (PNavigationEventHandler.))))
+
+;;var clickedNode = event.pickedNodes[0];
+;;var globalTransform = clickedNode.getGlobalTransform();   ;;globalToLocal? 
+;;var inverse = globalTransform.getInverse();  ;;localToGlobal?
+
+;;$("#cameraScale").text("" + (clickedNode.displayScale || 1));
+
+;;camera.animateViewToTransform(inverse, 500);
+
+;;zoom-to-node (ala prezi)
+;;We may just want to provide a transform stack..
+;;So wherever we zoomed in from, we invert the zoom...
+;;Maybe allow the backspace to revert to the previous coords.
+(defn zoom-on-double-click [duration]
+  (let [zoomtime (long duration)
+        focus    (atom nil)
+        zoom-out       nil
+        zoom-in  (fn zoom-in [cam ^PNode nd]
+                   (center-on! cam (.getFullBounds nd) true (long zoomtime))
+                   )]
+    {:mouseClicked (fn [e]
+                     (when (and (events/left-click? e)
+                                (events/double-click? e))
+                       (let [nd (events/picked-node e)]
+                         (if (identical? nd @focus)
+                           (do  (reset! focus nil) 
+                                (zoom-out nd)
+                                )
+                           (do (reset! focus nd)
+                               (zoom-in nd))))))}))
+
+                             
+
+;;Note: they already have this implemented in piccolo extras..
+;;we can probably just wrap that.  For now, all I want to do
+;;is identify which node, and by proxy, entity is selected.
+;;Selections should occur when we click on an entity.
+;;From here, we can start building interactive property
+;;views of the entity, perhaps using swing trees and the like.
+(defn selector   [select deselect]
+  {:mouseClicked nil
+   :mouseExited  nil}
+  )
+
+
+
+;;can we visualize a marathon project?
 
 (comment ;testing events
   (defn on-click! [nd f]  (with-input! nd {:mouseClicked  f}))

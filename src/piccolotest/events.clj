@@ -203,7 +203,23 @@
 ;;and decorate it with additional information (i.e. node,
 ;;pickpath, etc.)
 
-
+;;Basic mouse predicates.
+(defn single-click? [^PInputEvent e]   (== 1 (.getClickCount e)))
+(defn double-click? [^PInputEvent e]   (== 2 (.getClickCount e)))
+(defn left-click?   [^PInputEvent e]   (.isLeftMouseButton   e))
+(defn right-click?  [^PInputEvent e]   (.isRightMouseButton  e))
+(defn middle-click? [^PInputEvent e]   (.isMiddleMouseButton e))
+(defn meta?         [^PInputEvent e]   (.isMetaDown e))
+(defn mouse-wheel?  [^PInputEvent e]   (.isMouseWheelEvent e))
+(defn shift?        [^PInputEvent e]   (.isShiftDown e))
+(defn control?      [^PInputEvent e]   (.isControlDown e))
+(defn alt?          [^PInputEvent e]   (.isAltDown e))
+(defn key-press?    [^PInputEvent e]   (.isKeyEvent e))
+(defn ^char key-char [^PInputEvent e]  (.getKeyChar e))
+(defn ^int  key-code [^PInputEvent e]  (.getKeyCode e))
+(defn ^PNode picked-node [^PInputEvent e] (.getPickedNode e))
+(defn ^PCamera camera [^PInputEvent e] (.getCamera e))
+(defn ^PCamera top-camera [^PInputEvent e] (.getTopCamera e))
 
 ;(defn event-filter [])
 
