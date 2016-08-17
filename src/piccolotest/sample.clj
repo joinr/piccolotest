@@ -6,7 +6,7 @@
             [spork.graphics2d.font :as font]
             [clojure.core.async :as a
              :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]]
-            [piccolotest [events :as events]])
+            [piccolotest [events :as events] [properties :as props]])
   (:import
    [org.piccolo2d         PCanvas PLayer PNode PRoot POffscreenCanvas PCamera]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
@@ -353,6 +353,24 @@
                 (for [nd (node-seq nd)]
                   [(node-meta nd) nd]))))
 
+;;Sticks the node to said camera by following the camera's
+;;view transform.  Acts as a virtual child of the camera...
+;;sticky node basically...
+(defn ->stick-to-camera [nd ^PCamera cam]
+  (let [lis (props/property-listener {PCamera/PROPERTY_VIEW_TRANSFORM
+                                      (fn [old new]
+                                        (let [bnds (.getViewBounds cam)
+                                              x (.getX bnds)
+                                              y (.getY bnds)]
+                                          (translate-to! nd x y)))})]       
+    (doto cam
+      (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
+  
+(comment ;;testing
+  (def controls (->layer [(gui/button "Howdy!" (fn [_] (add-child @canvas (->circle :blue (rand-int 600) (rand-int 600) 30 30))))]))
+  (render! [(->filled-rect :red 0 0 600 600) controls])
+  (->stick-to-camera controls (.getCamera @canvas))
+  )
 
 ;;cameras give us additional views...
 (defn ^org.piccolo2d.PCamera ->camera []
@@ -1024,7 +1042,6 @@
 (def canvas (atom nil))
 
 (defn canvas? [x] (instance? org.piccolo2d.PCanvas x))
-
 (defn show!
   ([cnv]
    (let [c (if  (canvas? cnv) cnv
@@ -1165,7 +1182,6 @@
       cnv))
 
 (defn strokeable? [nd]  (instance? org.piccolo2d.nodes.PShape nd))
-
 (defn highlight-stroke! [nd color]
     (let [^PNode nd     (as-node nd)
           old-stroke    (.getStroke nd)
@@ -1190,15 +1206,15 @@
 
 (defn ->bounds-rect [color nd]
   (let [^PNode nd (as-node nd)
-        bounds (.getFullBounds nd)]
+        bounds    (.getFullBounds nd)]
     (->rect color 0.0 0.0
-            (.getWidth bounds) (.getHeight bounds))))
+            (.getWidth  bounds)
+            (.getHeight bounds))))
 
 ;;Problem is, if we add the child, we get the parent transforms
 ;;applied...
 (defn highlight-bounds! [nd color]
-  (let [hbounds       (->bounds-rect color nd)
-          ]
+  (let [hbounds (->bounds-rect color nd)]
       (-> nd
           (vary-node-meta 
            assoc :highlighted hbounds)
