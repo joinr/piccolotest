@@ -148,6 +148,9 @@
   org.piccolo2d.PNode
   (as-node   [nd]       nd)
   (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
+  org.piccolo2d.PLayer
+  (as-node   [nd]       nd)
+  (add-child [nd chld] (do (.addChild nd (as-node chld)) nd))
   org.piccolo2d.PCanvas
   (as-node   [nd]        (.getRoot ^PCanvas nd))
   (add-child [nd chld]   (do (.addChild (.getLayer nd) (as-node chld)) nd))
@@ -284,12 +287,15 @@
       (.invalidatePaint nd)
       nd))
 
-(defn ^PNode scale! [^PNode nd  xscale yscale]
-  (let [xscale  (double xscale)
-        yscale  (double yscale)
-        trans (doto (AffineTransform.)
-                (.scale (double xscale) (double yscale)))]
-    (doto nd (.transformBy trans))))
+(defn ^PNode scale!
+  ([^PNode nd  xscale yscale]
+   (let [xscale  (double xscale)
+         yscale  (double yscale)
+         trans (doto (AffineTransform.)
+                 (.scale (double xscale) (double yscale)))]
+     (doto nd (.transformBy trans))))
+  ([^PNode nd ^double scale]
+   (doto nd (.setScale scale))))
 
 (defn ^PPath stroke! [^PPath nd ^java.awt.Stroke s]
   (doto nd
@@ -358,11 +364,11 @@
 (defn ->stick-to-camera [nd ^PCamera cam]
   (let [old-scale (volatile! (.getViewScale cam))
         rescale! (fn rescale! [nd newscale]
-                  (if (= @old-scale newscale)
-                    nd
-                    (do (scale! nd (/ 1.0 newscale)
-                                (/ 1.0 newscale))
-                        (vreset! old-scale newscale))))
+                   (if (= @old-scale newscale)
+                     nd
+                     (do                                  
+                       (vreset! old-scale newscale)
+                       (scale! nd (/ 1.0 newscale)))))
         lis (props/property-listener
              {PCamera/PROPERTY_VIEW_TRANSFORM
               (fn [old new]
@@ -372,7 +378,7 @@
                       new-scale (.getViewScale cam)]
                   (-> nd
                       (translate-to! x y)
-                      (rescale! new-scale)
+                      (rescale! new-scale);(/ 1.0 new-scale))
                       )))})]       
     (doto cam
       (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
@@ -1209,8 +1215,8 @@
   (some swing?  (node-seq (as-node x))))
                  
 ;;animate entities...
-(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom?]}]
-  (let  [cnv   (doto (if (has-swing? nd)
+(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing?]}]
+  (let  [cnv   (doto (if (or swing? (has-swing? nd))
                        (->swing-canvas)
                        (->canvas))
                    (.setPreferredSize (java.awt.Dimension. 600 600)))
