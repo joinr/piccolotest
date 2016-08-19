@@ -116,8 +116,6 @@
 ;;or provides a seq'd view of the underlying thing.
 ;;as-node should probably be like this.
 
-;;We also w
-
 ;;Another option is to explicitly extend as-node to shapes, or - more generally - to
 ;;have a single function that detects if the underlying obj extends IPiccNode, and then
 ;;delegates to as-node-, or if it's a shape (and only for shapes), creates a new node
@@ -126,7 +124,7 @@
 (defprotocol IPiccNode
   (as-node [nd])
   (add-child [nd chld]))
-
+  
 ;;We're currently not covering intersection in the spork shape library.
 ;;To make custom nodes, which have accurate picking, we'd have to do that.
 ;;If we don't care about picking, or we're okay with simply bounding boxes,
@@ -269,7 +267,8 @@
 
 (defn ^PNode translate-to!
   ([^PNode nd ^double x ^double y]
-   (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y)))
+   (do (.setGlobalTranslation nd (java.awt.geom.Point2D$Double. x y))
+       nd))
   ([nd ^clojure.lang.PersistentVector xy] (translate-to! nd (.nth xy 0) (.nth xy 1)))) 
 
 (defn ^PNode translate-by! [^PNode nd ^double x ^double y ]
@@ -357,19 +356,108 @@
 ;;view transform.  Acts as a virtual child of the camera...
 ;;sticky node basically...
 (defn ->stick-to-camera [nd ^PCamera cam]
-  (let [lis (props/property-listener {PCamera/PROPERTY_VIEW_TRANSFORM
-                                      (fn [old new]
-                                        (let [bnds (.getViewBounds cam)
-                                              x (.getX bnds)
-                                              y (.getY bnds)]
-                                          (translate-to! nd x y)))})]       
+  (let [old-scale (volatile! (.getViewScale cam))
+        rescale! (fn rescale! [nd newscale]
+                  (if (= @old-scale newscale)
+                    nd
+                    (do (scale! nd (/ 1.0 newscale)
+                                (/ 1.0 newscale))
+                        (vreset! old-scale newscale))))
+        lis (props/property-listener
+             {PCamera/PROPERTY_VIEW_TRANSFORM
+              (fn [old new]
+                (let [bnds (.getViewBounds cam)
+                      x (.getX bnds)
+                      y (.getY bnds)
+                      new-scale (.getViewScale cam)]
+                  (-> nd
+                      (translate-to! x y)
+                      (rescale! new-scale)
+                      )))})]       
     (doto cam
       (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
-  
+
+
+;;maybe rename this piccpanel?
+;;this is akin to the basic scene-graph
+;;configuration.
+(defprotocol IPiccScene
+  (base-layer    [scn])
+  (sticky-layer  [scn])
+  (active-camera [scn]))
+
+(defn add-sticky [scn nd]
+  (add-child (sticky-layer scn) nd))
+
+;;Defines implementations for standard scene conventions, with a sticky
+;;layer and a base (or default) piccolo2d layer.  Things in the sticky
+;;layer will automatically keep pace with the camera.
+(extend-protocol IPiccScene
+  org.piccolo2d.PCanvas
+  (base-layer    [scn] (.getLayer ^PCamera (active-camera scn) 0))
+  (sticky-layer  [scn] (if-let [l (get :sticky-layer (node-meta (.getRoot scn)))]
+                         l
+                         (let [^PLayer  l (-> (->layer)
+                                              (with-node-meta {:id :sticky-layer}))
+                               _  (->  (add-child (.getRoot ^PCanvas scn)
+                                                  l)
+                                       (with-node-meta {:sticky-layer l}))
+                               ^PCamera cam (active-camera scn)
+                               _ (->stick-to-camera l cam)
+                               _ (.addLayer cam l)]
+                           l)))
+  (active-camera [scn] (.getCamera ^PCanvas scn)) 
+  org.piccolo2d.POffscreenCanvas
+  (base-layer    [scn] (.getLayer ^PCamera (active-camera scn) 0))
+  (sticky-layer  [scn] (if-let [l (get :sticky-layer
+                                       (node-meta
+                                        (.getRoot ^POffscreenCanvas scn)))]
+                         l
+                         (let [^PLayer  l (-> (->layer)
+                                              (with-node-meta {:id :sticky-layer}))
+                               _  (->  (add-child (.getRoot ^POffscreenCanvas scn)
+                                                  l)
+                                       (with-node-meta {:sticky-layer l}))
+                               ^PCamera cam (active-camera scn)
+                               _ (->stick-to-camera l cam)
+                               _ (.addLayer cam l)]
+                           l)))
+  (active-camera [scn] (.getCamera ^POffscreenCanvas scn)) 
+  org.piccolo2d.extras.pswing.PSwingCanvas
+  (base-layer    [scn] (.getLayer ^PCamera (active-camera scn) 0))
+  (sticky-layer  [scn] (if-let [l (get :sticky-layer
+                                       (node-meta
+                                        (.getRoot ^PSwingCanvas scn)))]
+                         l
+                         (let [^PLayer  l (-> (->layer)
+                                              (with-node-meta {:id :sticky-layer}))
+                               _  (->  (add-child (.getRoot ^PSwingCanvas scn)
+                                                  l)
+                                       (with-node-meta {:sticky-layer l}))
+                               ^PCamera cam (active-camera scn)
+                               _ (->stick-to-camera l cam)
+                               _ (.addLayer cam l)]
+                           l)))
+  (active-camera [scn] (.getCamera ^PSwingCanvas scn)))
+
 (comment ;;testing
+  (defn mobj []
+    (let [m (atom nil)]
+      (reify Object
+        (toString [this] "blah")
+        (meta     [o] @m)
+        (withMeta [o  x]
+          (do (reset! m x) o)))))
+  
+  (def circles  (->layer))
   (def controls (->layer [(gui/button "Howdy!" (fn [_] (add-child @canvas (->circle :blue (rand-int 600) (rand-int 600) 30 30))))]))
   (render! [(->filled-rect :red 0 0 600 600) controls])
   (->stick-to-camera controls (.getCamera @canvas))
+  ;;we'd like to create canvases that have special properties.
+  ;;namely, the ability to stick control widgets on a control layer....
+  ;;control layer will follow the camera.
+  ;;control layer will preserve its scale.
+  ;;control layer will draw last.
   )
 
 ;;cameras give us additional views...

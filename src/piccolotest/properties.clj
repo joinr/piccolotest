@@ -21,7 +21,5 @@
     (^void propertyChange [this ^PropertyChangeEvent e]
       (when-let [f (get m (.getPropertyName e))]
         (f (.getOldValue e) (.getNewValue e))))))
-       
 
-
-      (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
+;      (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
