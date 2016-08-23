@@ -7,6 +7,13 @@
   (:import [java.awt.event KeyEvent]
            [java.awt Robot]))
 
+(defmacro eval-repl
+  "Imported from swingrepl. Evaluates expr on the 
+   swingrepl rpl, as if the user entered the input 
+   themselves."
+  [rpl expr]
+   `(org.dipert.swingrepl.main/eval-repl ~rpl ~expr))
+  
 ;;so....o
 (comment 
 (def repl-in (clojure.java.io/reader))
@@ -52,7 +59,12 @@
 ;; (def repl-input (java.io.PipedWriter.))
 ;; (def repl-in    (java.io.PipedReader. repl-input))
 
-              
+(defn test! []
+  (let [r (repl-panel 800 600)]
+    (swing/display-simple
+     (swing/stack r
+         (swing/button "interrupt!" (fn [e] (.interruptEvent r)))))))
+
 (comment 
 (defn paste-repl! [^String xs]  
   (clip/paste! xs)
@@ -65,16 +77,7 @@
 
 )
 
-(defn send-repl [^bsh.util.JConsole rpl ^String xs]
-  (do (.readLine rpl xs)
-      (.print rpl xs)
-      (.enterEvent rpl)))
 
-(defmacro eval-repl [rpl & body]
-  (let [r (with-meta (gensym "swingrepl") {:tag 'bsh.util.JConsole})]
-    `(let [~r ~rpl]
-       (send-repl ~r
-                  ~(str (first body))))))
       
 (def codes
   '[KeyEvent/VK_0 \0
