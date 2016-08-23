@@ -2,9 +2,12 @@
 ;;repl in compatible swing node form.
 (ns piccolotest.repl
   (:require [org.dipert.swingrepl.main]
-            [spork.util [clipboard :as clip]])
+            [spork.util [clipboard :as clip]]
+            [spork.cljgui.components [swing :as swing]])
   (:import [java.awt.event KeyEvent]
            [java.awt Robot]))
+
+;;so....o
 (comment 
 (def repl-in (clojure.java.io/reader))
 (def strokes (atom []))
@@ -20,18 +23,36 @@
          )))))
 (def txt (spork.cljgui.components.swing/text-field ""))
 )
-  
+
+;;this is what jconsole does.
+;;if you don't provide an in, it'll create
+;;a pipedwriter, and then wrap it with a
+;;pipedreader.
+		;; inPipe = cin;
+		;; if (inPipe == null) {
+		;; 	PipedWriter pout = new PipedWriter();
+		;; 	out = new PrintWriter(pout);
+		;; 	try {
+		;; 		inPipe = new PipedReader(pout);
+		;; 	} catch (IOException e) {
+		;; 		print("Console internal error: " + e);
+		;; 	}
+		;; }
+
 ;;Present the string as if the user entered
 ;;a sequence of key-presses
 (defn repl-panel
-  ([]
+  ([opts]
    (org.dipert.swingrepl.main/make-repl-jconsole
-    org.dipert.swingrepl.main/default-opts))
-  ([w h]
-   (doto (repl-panel)
+    (merge org.dipert.swingrepl.main/default-opts opts)))
+  ([w h ]
+   (doto (repl-panel {})
          (.setPreferredSize (java.awt.Dimension. w h)))))
 
+;; (def repl-input (java.io.PipedWriter.))
+;; (def repl-in    (java.io.PipedReader. repl-input))
 
+              
 (comment 
 (defn paste-repl! [^String xs]  
   (clip/paste! xs)
@@ -42,12 +63,19 @@
     (.keyRelease KeyEvent/VK_CONTROL)
     ))
 
-(defn send-repl [^String xs rpl]
-  (let [in  (.getIn rpl)
-        cs  (.toCharArray xs)]
-    (.read in cs 0 (alength cs))))
 )
 
+(defn send-repl [^bsh.util.JConsole rpl ^String xs]
+  (do (.readLine rpl xs)
+      (.print rpl xs)
+      (.enterEvent rpl)))
+
+(defmacro eval-repl [rpl & body]
+  (let [r (with-meta (gensym "swingrepl") {:tag 'bsh.util.JConsole})]
+    `(let [~r ~rpl]
+       (send-repl ~r
+                  ~(str (first body))))))
+      
 (def codes
   '[KeyEvent/VK_0 \0
     KeyEvent/VK_1 \1
