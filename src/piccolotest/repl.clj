@@ -52,8 +52,11 @@
   ([opts]
    (org.dipert.swingrepl.main/make-repl-jconsole
     (merge org.dipert.swingrepl.main/default-opts opts)))
-  ([w h ]
+  ([w h]
    (doto (repl-panel {})
+     (.setPreferredSize (java.awt.Dimension. w h))))
+  ([w h opts]
+   (doto (repl-panel opts)
          (.setPreferredSize (java.awt.Dimension. w h)))))
 
 ;; (def repl-input (java.io.PipedWriter.))
