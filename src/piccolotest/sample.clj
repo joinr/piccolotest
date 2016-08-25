@@ -1137,15 +1137,15 @@
 
 (defn canvas? [x] (instance? org.piccolo2d.PCanvas x))
 (defn show!
-  ([cnv]
+  ([cnv & {:keys [menu]}]
    (let [c (if  (canvas? cnv) cnv
                 (doto (->canvas cnv)
                   (.setPreferredSize (java.awt.Dimension. 600 600))))
          _ (reset! canvas c)
-         f (gui/toggle-top
-            (gui/display-simple
-            ;org.piccolo2d.extras.PFrame. "Canvas" false
-             c))]
+         menuf (if menu #(gui/add-menu menu %) identity)
+         f (->> (gui/display-simple  c)
+                (menuf)
+                (gui/toggle-top))]
      (reset! frame f)
      f)))
 
@@ -1215,7 +1215,7 @@
   (some swing?  (node-seq (as-node x))))
                  
 ;;animate entities...
-(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing?]}]
+(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu]}]
   (let  [cnv   (doto (if (or swing? (has-swing? nd))
                        (->swing-canvas)
                        (->canvas))
@@ -1231,7 +1231,7 @@
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
-      (show!   cnv)))
+      (show!   cnv :menu menu)))
 
 (defn render-raw!  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
@@ -1552,3 +1552,14 @@
     )
     
             
+(comment ;;testing menus
+  (def simple-menu (gui/map->reactive-menu "Debug"
+                                           {"Debug Item 1" "Hello"
+                                            "Debug Item 2" "World"}))
+  (def main-menu (gui/menu-bar (:view simple-menu)))
+;;         debug-menu      (gui/map->reactive-menu "Debug"
+;;                                                 debug-menu-spec)
+;;         main-menu       (gui/menu-bar (:view project-menu)
+;;                                       (:view processing-menu)
+;;                                       (:view debug-menu))
+  )
