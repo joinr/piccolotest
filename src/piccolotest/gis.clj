@@ -340,11 +340,8 @@
   (places     [b]           @places))
 
 
-(defn default-coords [nodes nd & {:keys [yscale yoffset xscale xoffset]
-                          :or {yscale +us-yscale+
-                               yoffset +us-y+
-                               xscale +us-xscale+
-                               xoffset +us-x+}}]
+(defn default-coords
+  ([nodes nd]
   (if (vector? nd) nd
       (let  [
              to-node     (get-node nodes nd)
@@ -353,6 +350,7 @@
              ]       
         [(.getX to-bounds)
          (.getY to-bounds)])))
+  ([nodes nd & res] (default-coords nodes nd)))
 
 ;;map constructor.
 (defn make-map [map-layer  coords-fn & {:keys [places tokens arcs?]}]
