@@ -339,6 +339,21 @@
   (tokens     [b]           @tokens)
   (places     [b]           @places))
 
+
+(defn default-coords [nodes nd & {:keys [yscale yoffset xscale xoffset]
+                          :or {yscale +us-yscale+
+                               yoffset +us-y+
+                               xscale +us-xscale+
+                               xoffset +us-x+}}]
+  (if (vector? nd) nd
+      (let  [
+             to-node     (get-node nodes nd)
+             to-bounds   (.getFullBoundsReference
+                          ^org.piccolo2d.PNode to-node)
+             ]       
+        [(.getX to-bounds)
+         (.getY to-bounds)])))
+
 ;;map constructor.
 (defn make-map [map-layer  coords-fn & {:keys [places tokens arcs?]}]
   (let [token-layer (picc/as-node [])
