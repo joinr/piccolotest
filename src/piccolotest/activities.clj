@@ -8,8 +8,19 @@
             PActivityScheduler]
                                         ;           [piccolotest.activities Timer PRoot]
            [org.piccolo2d PNode PRoot]
-           ))
+            [javax.swing SwingUtilities]))
         
+
+
+(defn invoke-later! [^java.lang.Runnable f]
+  (SwingUtilities/invokeLater f))
+
+(defmacro do-scene
+  "Ensures that any alterations of a live scene are handled on 
+   the swing EDT thread, where appropriate.  For other backends this may
+   be unncessary."
+  [& body]
+  `(invoke-later! (~'fn [] (do ~@body))))
 
 ;;note...
 ;;The paradigm of time and activities in Piccolo2d goes through
@@ -164,6 +175,65 @@
     (^void processInput [this]
       (process))))
 
+;;the timeline wraps scheduler, on-tick, clock, changed?
+;;and basically creates an alternate timeline not controlled
+;;by typical activities.  So, if we register an activity
+;;on the externally-driven timeline, then we're good to go.
+;;We could even hack the scheduler to ignore the global
+;;time passed in during process-activities.
+(deftype timeline [^PActivityScheduler scheduler on-tick
+                   clock
+                   changed?]
+  org.piccolo2d.PRoot$InputSource
+  (^void processInput [this]
+    (when @changed?
+      (let [t (long @clock)
+            _ (reset! changed? false)]
+        (do (.processActivities scheduler t)
+            (when on-tick (on-tick t))
+            ))))
+  clojure.lang.IDeref
+  (deref [this] {:scheduler scheduler
+                 :on-tick on-tick
+                 :clock clock
+                 :changed? changed?})
+  )
+
+;;we also want to register some side-effecting ops
+;;the timeline listens to clock changes.
+;;changes trigger process-input calls to root
+;;(on the edt thread)
+;;the timeline is an input-source, that when polled,
+;;if changes are pending, we need to process the
+;;registered activities with the new time.
+(defn ->timeline [^PRoot root clock on-tick]
+  (let [changed? (atom false)
+        _        (add-watch clock :timeline
+                            (fn [r k old new]
+                              (when (not (== old new))
+                                (reset! changed? true)
+                                (do-scene
+                                 (.processInputs root))
+                                )))
+        tm   (timeline.  (PActivityScheduler. root)
+                         on-tick
+                         clock
+                         changed?)]
+    (.addInputSource root tm)
+    tm))
+
+(comment ;testing
+  ;;mucking with the timeline
+ 
+(def tm (act/->timeline (.getRoot @canvas) clock (fn [t] (println [:time t]))))
+  
+  )
+              
+;;we want to develop our own timeline...
+;;the timeline, then, should be an
+;;option for registering activities.
+
+
 ;;say we want to have an asynchronous transform event...
 ;;Can we have an activity scheduler that simply lives
 ;;on another timeline?
@@ -177,8 +247,11 @@
 ;;stuff is to schedule the canonical activities with
 ;;the async activity scheduler.
 
+(comment 
 (defn async-activities [time-source ^PRoot proot]
   (let [sched          (PActivityScheduler.  proot)
         current-time   (atom @time-source)        
         ]
     ))
+)
+
