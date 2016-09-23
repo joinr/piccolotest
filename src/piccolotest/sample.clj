@@ -6,7 +6,7 @@
             [spork.graphics2d.font :as font]
             [clojure.core.async :as a
              :refer [>! <! >!! <!! go chan buffer close! thread alts! alts!! timeout]]
-            [piccolotest [events :as events] [properties :as props]])
+            [piccolotest [events :as events] [properties :as props] [activities :as acts]])
   (:import
    [org.piccolo2d         PCanvas PLayer PNode PRoot POffscreenCanvas PCamera]
    [org.piccolo2d.event   PBasicInputEventHandler PDragEventHandler
@@ -221,7 +221,8 @@
 (defn node-parent [nd]
   (.getParent ^PNode (as-node nd)))
 
-
+(defn node-root [nd]
+  (.getRoot ^PNode (as-node nd)))
 
 (defn ->cache [child]
   (let [c (PNodeCache.)
@@ -321,6 +322,8 @@
   [^PNode nd vis]
    (doto nd (.setVisible (boolean vis))))
 
+;;Animated Activities
+;;===================
 
 ;;These are all based on basic activities, notably
 ;;the global time derived from proot's get-time, using
@@ -330,26 +333,88 @@
 ;;can extend pactivity to have event-driven durations or
 ;;non-standard views of global time.
 
+;;Currently, we allow the definition of asynchronous
+;;timelines (i.e. activity schedules that don't follow
+;;the System/currentTime that piccolo uses by default
+;;in the PRoot)
+
+;;So, the default piccolo API will schedule activities
+;;for the node, if the node has a root (with an
+;;activity scheduler), then return the activity.
+
+;;We'd like to communicate the intent to schedule
+;;the activity elsewhere, by specifying an alternate
+;;timeline.
+
+(defn derive-timeline
+  "Tries to find a timeline associated with the 
+  root of nd, stored in the node properties under
+  :default-timeline"
+  ([nd clock nm]
+   (let [rt (node-root nd)]
+     (if-let [tl (get (node-meta rt) nm)]
+       tl
+       (let [tl (acts/->timeline rt clock)
+             _  (vary-node-meta rt assoc nm tl)]
+         tl))))
+  ([nd clock] (derive-timeline nd  clock :default-timeline))
+  ([nd] (derive-timeline nd (atom 0) :default-timeline)))
+
+;;Synchronous activities (driven by SystemTime)
+;;============================================
 ;;This actually can embiggen the node....
-(defn animate-to-bounds [nd x y w h duration]
+(defn animate-to-bounds! [nd x y w h duration]
   (do 
     (.animateToBounds ^PNode (as-node nd)
        (double x) (double y) (double w) (double h) (long duration))
     nd))
 
-(defn animate-transform-to-bounds [nd x y w h duration]
+(defn animate-transform-to-bounds! [nd x y w h duration]
   (do 
     (.animateTransformToBounds ^PNode (as-node nd)
        (double x) (double y) (double w) (double h) (long duration))
     nd))
 
 ;;this parametrically animates all three properties...
-(defn animate-to-position-scale-rotation [nd x y scale theta duration]
+(defn animate-to-position-scale-rotation! [nd x y scale theta duration]
   (do (.animateToPositionScaleRotation
        ^PNode (as-node nd) (double x) (double y) (double scale)
        (double theta) (long  duration))
       nd))
 
+;;Asynchronous activities
+;;Driven by a timeline arg...
+(defn animate-to-bounds
+  ([nd x y w h duration timeline]
+   (let [act  (.animateToBounds ^PNode (as-node nd)
+                                (double x) (double y)
+                                (double w) (double h) (long duration))]
+     (acts/on-timeline! act timeline) 
+     nd))
+  ([nd x y w h]
+   (animate-to-bounds nd x y w h (derive-timeline nd))))
+
+(defn animate-transform-to-bounds
+  ([nd x y w h duration timeline]
+   (let [act  (.animateTransformToBounds ^PNode (as-node nd)
+                  (double x) (double y)
+                  (double w) (double h) (long duration))]
+     (acts/on-timeline! act timeline)        
+     nd))
+  ([nd x y w h duration]
+   (animate-transform-to-bounds nd x y w h (derive-timeline nd))))
+
+;;this parametrically animates all three properties...
+(defn animate-to-position-scale-rotation
+  ([nd x y scale theta duration timeline]
+   (let [act (.animateToPositionScaleRotation ^PNode (as-node nd)
+                (double x) (double y) (double scale)
+                (double theta) (long  duration))]
+     (acts/on-timeline! act timeline)
+     nd))
+  ([nd x y scale theta duration]
+   (animate-to-position-scale-rotation
+     nd x y scale theta duration (derive-timeline nd))))
 
 ;;getting the idea for reactive nodes....
 ;;nodes that are a function of time....

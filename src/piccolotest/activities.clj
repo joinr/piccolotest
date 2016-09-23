@@ -206,21 +206,100 @@
 ;;the timeline is an input-source, that when polled,
 ;;if changes are pending, we need to process the
 ;;registered activities with the new time.
-(defn ->timeline [^PRoot root clock on-tick]
-  (let [changed? (atom false)
-        _        (add-watch clock :timeline
-                            (fn [r k old new]
-                              (when (not (== old new))
-                                (reset! changed? true)
-                                (do-scene
-                                 (.processInputs root))
-                                )))
+(defn ->timeline
+  ([^PRoot root clock on-tick]
+   (let [changed? (atom false)
+         _        (add-watch clock :timeline
+                             (fn [r k old new]
+                               (when (not (== old new))
+                                 (reset! changed? true)
+                                 (do-scene
+                                  (.processInputs root))
+                                 )))
         tm   (timeline.  (PActivityScheduler. root)
                          on-tick
                          clock
                          changed?)]
-    (.addInputSource root tm)
-    tm))
+     (.addInputSource root tm)
+     tm))
+  ([root clock] (->timeline root clock nil)))
+
+(defn ^PActivityScheduler get-scheduler [^PActivity activity]
+  (.getActivityScheduler activity))
+
+(defn on-timeline!
+  "Schedule activity on tl.  If activity already exists on a 
+   schedule, it will be removed, effectively 'swapping' to another
+   timeline."
+  [^PActivity activity ^timeline tl]
+  (let [^PActivityScheduler sched  (get-scheduler activity)
+        ^PActivityScheduler target (.scheduler tl)]
+    (do (when (not (identical? sched target)) 
+          (do (when sched (.removeActivity sched activity))
+              (.addActivity target activity)))
+        activity)))
+
+;;now we need to define ways to override the
+;;default behavior for scheduling activities
+;;on a node...so that the activity lives on
+;;a different timeline.
+
+;;PNode has methods for scheduling
+;;default activities...
+
+;;AnimateToTransform, etc.
+;;All of these use PNode/addActivity
+;;which references the node's PRoot.
+;;This calls PRoot's addActivity.  Note:
+;;the individual methods also return the
+;;scheduled activity as output...
+
+;;So, the train of consequences (megadeth reference)
+;;is this:
+;;  If we control how we add activities to the PRoot
+;;  we can tap into the default behavior of PNode's
+;;  animation interface, and control the
+;;  timeline that feeds steps to the activities.
+
+;;  Currently, PRoot nodes have an addActivity
+;;  method that controls "which" ActivitySchedule
+;;  the activity is added to.
+;;  The default is the System/time driven
+;;  scheduler.
+;;  We want to redirect the activity so that
+;;  it's placed on our asynchronous scheduler...
+;;  which hooks into the PRoot rendering
+;;  process via another PInput source...
+
+;;Options:
+;;-  Subclass PRoot and override addActivity (least damaging)
+;;-  Subclass PNode and override addActvitiy (far-reaching
+;;-  consequences, since lots of things depend on PNode).
+;;-  Use existing methods for addActivity, but manually
+;;   move the activity from the scheduler to the async
+;;   scheduler (may cost us performance....but not untenable)
+;;   Activities are stored in an arraylist....so we could
+;;   and-and-remove pretty easily.
+;;-  Temporarily set the node's PRoot to nil, "fooling"
+;;   piccolo into seeing the node as detached...
+;;   This requires us to remove the node's parent, and
+;;   reset it afterward.  Again, costs us performance
+;;   in terms of property changes and triggering
+;;   possible bounds updates.
+
+;;Cleanest is to override PRoot....
+
+;;Simplest is to manually remove the activity...
+;;We'll go simple for now and see if there are any
+;;implications...
+
+;;So we need an API to wrap the process of animating
+;;a node, either synchronously with global time,
+;;or asynchronously with respect to an alternate,
+;;event-driven timeline.
+
+
+
 
 (comment ;testing
   ;;mucking with the timeline
