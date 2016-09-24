@@ -180,7 +180,8 @@
    :start (.getStartTime act)
    :duration (.getDuration act)
    :end (.getStopTime act)
-   :next (.getNextStepTime act)})
+   :next (.getNextStepTime act)
+   :activity act})
 
 ;;the timeline wraps scheduler, on-tick, clock, changed?
 ;;and basically creates an alternate timeline not controlled
@@ -237,9 +238,19 @@
   (.getActivityScheduler activity))
 
 (defn activities [^timeline tl]
-  (.getActivitiesReference (.scheduler tl)))
+  (.getActivitiesReference ^PActivityScheduler (.scheduler tl)))
 
+(defn ^PActivity set-start-time [^PActivity a t]
+  (do (.setStartTime a (long t))
+      (set-nextStepTime a (long t))
+      a))
+  
 
+;;this setups up functions that les us modify private
+;;fields effeciently.  REALLY useful for setting up
+;;PActivity objects....
+(interop/expose-private-accessors org.piccolo2d.activities.PActivity
+  nextStepTime)
                     
 
 (defn on-timeline!
@@ -253,7 +264,7 @@
         ]
     (do (when (not (identical? sched target)) 
           (do (when sched (.removeActivity sched activity))
-              (.setStartTime activity (long target-time))
+              (set-start-time activity target-time)
               (.addActivity target activity)))
         activity)))
 

@@ -416,6 +416,34 @@
    (animate-to-position-scale-rotation
      nd x y scale theta duration (derive-timeline nd))))
 
+(comment ;testing
+
+  (def fr (->filled-rect :red 0 0 100 100))
+  (render! fr)
+  (def tl (derive-timeline fr))
+  (def clock (:clock @tl))
+  (animate-to-position-scale-rotation fr 100 1000 1.0 0 2000)
+
+  ;;more complicated
+  (defn big-test [& {:keys [dur] :or {dur 30000}}]
+    (let [rects (for [i (range 1000)]
+                  (->filled-rect (java.awt.Color. (int (rand-int 255)) (int (rand-int 255)) (int (rand-int 255)))
+                                 (rand-int 1000)
+                                 (rand-int 1000)
+                                 20 20))
+          ]
+      (do (render! rects)
+          (doseq [r rects]
+            (animate-to-position-scale-rotation r (rand-int 1000) (rand-int 1000) 1.0 (/ Math/PI 2.0) dur))
+          (let [clock (:clock @(derive-timeline (first rects)))]
+            (dotimes [i (/ dur 20.0)]
+              (swap! clock (fn [x] (unchecked-add x 20)))
+              (Thread/sleep 20))))))
+            
+
+
+  )
+
 ;;getting the idea for reactive nodes....
 ;;nodes that are a function of time....
 
