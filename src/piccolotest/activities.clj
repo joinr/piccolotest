@@ -3,7 +3,7 @@
 ;;piccolo2d stuff is the desire to have
 ;;activities respond to external events.
 (ns piccolotest.activities
-  ;(:require [piccolotest.activities [Timer :as tmr]])
+  (:require [piccolotest.interop :as interop])
   (:import [org.piccolo2d.activities PActivity PInterpolatingActivity
             PActivityScheduler]
                                         ;           [piccolotest.activities Timer PRoot]
@@ -175,6 +175,13 @@
     (^void processInput [this]
       (process))))
 
+(defn activity-info [^PActivity act]
+  {:type (type act)
+   :start (.getStartTime act)
+   :duration (.getDuration act)
+   :end (.getStopTime act)
+   :next (.getNextStepTime act)})
+
 ;;the timeline wraps scheduler, on-tick, clock, changed?
 ;;and basically creates an alternate timeline not controlled
 ;;by typical activities.  So, if we register an activity
@@ -192,6 +199,8 @@
         (do (.processActivities scheduler t)
             (when on-tick (on-tick t))
             ))))
+  clojure.lang.ISeq
+  (seq [obj] (map activity-info (.getActivitiesReference scheduler)))
   clojure.lang.IDeref
   (deref [this] {:scheduler scheduler
                  :on-tick on-tick
@@ -227,15 +236,24 @@
 (defn ^PActivityScheduler get-scheduler [^PActivity activity]
   (.getActivityScheduler activity))
 
+(defn activities [^timeline tl]
+  (.getActivitiesReference (.scheduler tl)))
+
+
+                    
+
 (defn on-timeline!
   "Schedule activity on tl.  If activity already exists on a 
    schedule, it will be removed, effectively 'swapping' to another
    timeline."
   [^PActivity activity ^timeline tl]
   (let [^PActivityScheduler sched  (get-scheduler activity)
-        ^PActivityScheduler target (.scheduler tl)]
+        ^PActivityScheduler target (.scheduler tl)
+        target-time @(.clock tl)
+        ]
     (do (when (not (identical? sched target)) 
           (do (when sched (.removeActivity sched activity))
+              (.setStartTime activity (long target-time))
               (.addActivity target activity)))
         activity)))
 
