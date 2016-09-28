@@ -439,7 +439,9 @@
             (dotimes [i (/ dur 20.0)]
               (swap! clock (fn [x] (unchecked-add x 20)))
               (Thread/sleep 20))))))
-            
+
+  ;;now we'd like to schedule multiple dependent activities....
+  ;;this is like an activity chain
 
 
   )

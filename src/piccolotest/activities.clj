@@ -10,8 +10,6 @@
            [org.piccolo2d PNode PRoot]
             [javax.swing SwingUtilities]))
         
-
-
 (defn invoke-later! [^java.lang.Runnable f]
   (SwingUtilities/invokeLater f))
 
@@ -183,6 +181,12 @@
    :next (.getNextStepTime act)
    :activity act})
 
+;;this setups up functions that les us modify private
+;;fields effeciently.  REALLY useful for setting up
+;;PActivity objects....
+(interop/expose-private-accessors org.piccolo2d.activities.PActivity
+  nextStepTime)
+
 ;;the timeline wraps scheduler, on-tick, clock, changed?
 ;;and basically creates an alternate timeline not controlled
 ;;by typical activities.  So, if we register an activity
@@ -244,15 +248,7 @@
   (do (.setStartTime a (long t))
       (set-nextStepTime a (long t))
       a))
-  
-
-;;this setups up functions that les us modify private
-;;fields effeciently.  REALLY useful for setting up
-;;PActivity objects....
-(interop/expose-private-accessors org.piccolo2d.activities.PActivity
-  nextStepTime)
-                    
-
+                
 (defn on-timeline!
   "Schedule activity on tl.  If activity already exists on a 
    schedule, it will be removed, effectively 'swapping' to another
@@ -327,14 +323,32 @@
 ;;or asynchronously with respect to an alternate,
 ;;event-driven timeline.
 
+;;Complex Activities
+;;==================
+;;Can we define an activity chain or something?
+;;We can possibly define new activities via
+;;inheritance....
 
+;;alternately, we could define our own functional
+;;interface for scheduling activities via process
+;;input....this may actually be faster.
 
+;;Rather than using piccolo2d's api strictly...
+;;we could tap into libraries like freactive...
+;;and use reactions/ratoms to compose
+;;animated values over time, again using our
+;;clock to control the animation.
+
+;;we can use PActivity/startAfter to script activities...
+;;that's the only "combinator" between the activities...
+;;All it's doing is altering the starttime of
+;;the remaining activities...
+;;note: there are possibly opportunities for
+;;parallelism here, might investigate further.
 
 (comment ;testing
   ;;mucking with the timeline
- 
-(def tm (act/->timeline (.getRoot @canvas) clock (fn [t] (println [:time t]))))
-  
+  (def tm (act/->timeline (.getRoot @canvas) clock (fn [t] (println [:time t]))))  
   )
               
 ;;we want to develop our own timeline...
