@@ -199,14 +199,25 @@
                        (let [nxt  (spork.trends/add-slice @data x)
                              _    (reset! data nxt)                   
                              ]
-                         nxt)))                       
+                         nxt)))
+        ;;need to change this to work with piccolo.
+        ;; add-sample (if sliced (fn add-sample! [x]
+        ;;                         (push-slice x)
+        ;;                         (plter @data)                                
+        ;;                         (.invalidatePaint plotarea))
+        ;;                (fn add-sample! [x]
+        ;;                  (plter x)
+        ;;                  (.invalidatePaint plotarea)))
         add-sample (if sliced (fn add-sample! [x]
                                 (push-slice x)
                                 (plter @data)
-                                (.invalidatePaint plotarea))
+                                (p/do-scene 
+                                 (.invalidatePaint plotarea)))
                        (fn add-sample! [x]
                          (plter x)
-                         (.invalidatePaint plotarea)))]        
+                         (p/do-scene 
+                          (.invalidatePaint plotarea))))
+        ]        
     (p/with-node-meta cnv      
       (merge (p/node-meta cnv)
              plt
