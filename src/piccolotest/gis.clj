@@ -91,7 +91,10 @@
 (defn place [nodes nd target]
   (let [nd    (get-node nodes nd)
         [x y] (get-coords nodes nd)
-        [x2 y2] (if (vector? target) target (get-coords nodes target))]
+        target   (get-node nodes target) ;added
+        [x2 y2] ;(if (vector? target) target
+                 (get-coords nodes target) ;)
+    ]
     (shift! nd (- x2 x)
             (- y2 y)
             )))
