@@ -127,6 +127,7 @@
     [(p/translate (/ (.getWidth bounds) 2.0) 0.0
                   l)
      r]))
+
 (defn ->legend [series & {:keys [direction] :or {direction :vertical}}]
   (if (= direction :vertical)
     (apply p/->stack
@@ -161,7 +162,20 @@
        (p/->translate  (- right xr)
                        (-        mid hr)
                       r)])))
-     
+
+;;this is a really terrible way to lookup the chart node....
+(defn chart-node? [nd]
+  (let [stroke? (fn [nd]
+                  (= (:id (p/node-meta nd)) 'with-stroke))]
+    (when-let [xs (p/node-children nd)]
+      (and (p/image-node? (first xs))
+           (every? stroke? (rest xs))
+           ))))
+
+(defn find-plot-area [root]
+  (->> (p/node-seq root)         
+       (some  #(when (= (:id (p/node-meta %)) :plotarea) %))))
+
 ;;should be a drop-in replacement for dynamic-plot.
 ;;If we wanted to, we could place these in a separate
 ;;frame wrapped in a pcanvas, and have them interact
@@ -191,7 +205,7 @@
                                                                                     (:plot plt))))
                                      lgnd))
                                         ;this only matters for dynamic area plots.
-        ^org.piccolo2d.PNode plotarea (p/find-node :plotarea cnv)
+        ^org.piccolo2d.PNode plotarea (find-plot-area cnv)
         
         data       (when sliced (atom (spork.trends/trends-from series)))
         push-slice (when sliced
@@ -248,7 +262,88 @@
 ;;Dynamically resize plots according to data..
 
 
+;;we can define a useful type of reusable plot here...
+;;a trail-plot, where we basically have nodes in the 
+
+;;so, a trail-plot acts like a map-node...
+;;with the exception that we have a layer devoted to rendering
+;;trails, or some other kind of dynamic content?
+
+;;We basically have a fancy cartesian coordinate grid...
+;;On top of the grid, we have a background layer (a 2d Texture,
+;;or canvas, we can draw on with a default charting method),
+;;and on top of that, we have dynamic nodes that move around
+;;inside the plot.
+
+;;Icons are mobile nodes that live in a layer just above the
+;;background of the plot.  Basically, we can inject dynamic
+;;icons onto the plot, and move them dependently, or
+;;independently of the plot.
+(defn add-icon [nd nm icon & {:keys [x y] :or [x 0 y 0]}]
+  (let [pa (:plotarea (p/node-meta nd))]
+    (p/do-scene
+     (p/add-child! pa icon)
+;     (picc/translate! 
+     )))
+
+;;all we need is a layer with the entities added...
+;;it acts very similar to the gis protocol...
+
+;;helper fn to take advance of local->parent 
+;; (defn ^java.awt.geom.Point2D$Double ->point [^double x ^double y]
+;;   (java.awt.geom.Point2D$Double x y))
+
 (comment
+  (def ic (picc/->filled-rect :red 0 0 50 50))
+  (def p  (piccolotest.plots/plot-node :dot :title "Blah" :width 600 :height 600 :series shared/risk-series :xmax 600 :ymax 600))
+  (picc/add-child (:plotarea (picc/node-meta p)) ic)
+  ;;we have the state stored...
+  (def the-state  {:icons {:a [ic (atom [0 0])]}
+                           :plot  p})
+  (defn shift-origin [brd  nm]
+    (let [[nd xy] (get-in brd [:icons nm])
+          [x y]   @xy]
+      (do (picc/translate! nd (- x) (- y))
+          (reset! xy [0 0])
+          brd)))
+  (defn shift-entity [brd nm dx dy trail?]
+    (let [[nd x0y0] (get-in brd [:icons nm])
+          [x0 y0] @x0y0
+          x (+ x0 dx)
+          y (+ y0 dy)
+          newxy [x y]]
+      (do (when trail?
+            (let [plt  (:plot brd)
+                  add! (:add-sample (picc/node-meta plt))
+                  clr  (quilsample.bridge/color->risk
+                        (quilsample.bridge/default-cycle->color newxy))]
+              (add! [clr x y])))
+          (picc/translate! nd dx dy)
+          (reset! x0y0 newxy)
+          brd)))
+  (defmacro msg [name & body]
+    `(do ; (println ~name)
+         ~@body))
+  (defn step-entity [brd nm]
+    (let [[nd x0y0] (get-in brd [:icons nm])
+          [x0 y0] @x0y0
+          ]
+      (cond (pos? y0) ;;deployed, rise up.            
+            (if (or (>= y0 600)    
+                    (< (rand) 0.01))
+              (msg "reset!" (shift-origin brd nm))
+              (msg "bog"
+                   (shift-entity brd nm 0 1 (> (rand) 0.75))))
+            ;;deploy?
+            (and (>= x0 300)
+                 (< (rand) 0.001))
+            (msg "Deploy!" (shift-entity brd nm 0 1 (> (rand) 0.7)))
+            (>= x0 600)
+               (msg "reset-nodep" (shift-origin brd nm))
+            :else
+               (msg "dwell"
+                    (shift-entity brd nm 1 0 false)))))
+                     
  ;;testing layout functions and stuff.. Trying to fix
  ;;node picking, which seems to be erroneous.
  (->dynamic-plot :title    "helloa"

@@ -962,6 +962,12 @@
 
 (defn atom? [x] (instance? clojure.lang.Atom x))
 
+;;Extra predicates for primitive node types.  Found these to
+;;be somewhat useful.
+(defn path-node? [nd] (instance? org.piccolo2d.nodes.PPath nd))
+(defn text-node? [nd] (instance? org.piccolo2d.nodes.PText nd))
+(defn image-node? [nd] (instance? org.piccolo2d.nodes.PImage nd))
+
 ;;I think this may be killing us.....
 ;;Supports animated, time-varying fade via the atom.
 (defn ^PNode ->fade [alpha child]

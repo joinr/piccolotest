@@ -51,8 +51,8 @@
     nd))
 
 (defmacro register! [nd & body]
-  `(if-let [m# (:properties (meta ~nd))]
-     (p/with-node-meta (p/as-node ~@body) m#)
+  `(if-let [m# (:properties (meta ~nd))]     
+     (p/with-node-meta (p/as-node ~@body) (if (map? m#) m# {:id m#}))
      ~@body))
 
 (defmethod nodify :default [nd]
