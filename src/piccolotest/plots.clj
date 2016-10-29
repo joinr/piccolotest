@@ -8,6 +8,7 @@
             [spork [sketch :as sketch] [trends :as trends] ]
             [spork.util.general]
             [piccolotest.canvas :as canvas]))
+
 ;;Note: I'm currently using the plot specifications from
 ;;spork.sketch, and rendering them into scenes using
 ;;piccolotest.scene/nodify.  In the future, I will
