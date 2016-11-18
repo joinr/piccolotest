@@ -206,15 +206,17 @@
                                                                                     (:plot plt))))
                                      lgnd))
                                         ;this only matters for dynamic area plots.
-        ^org.piccolo2d.PNode plotarea (find-plot-area cnv)
-        
-        data       (when sliced (atom (spork.trends/trends-from series)))
-        push-slice (when sliced
-                     (fn push-slice [x]
-                       (let [nxt  (spork.trends/add-slice @data x)
-                             _    (reset! data nxt)                   
-                             ]
-                         nxt)))
+        ^org.piccolo2d.PNode plotarea  (find-plot-area cnv)
+        plot-parent (p/node-parent plotarea)
+        icon-layer  (p/->layer)
+        _           (p/add-child plot-parent icon-layer)
+        data        (when sliced (atom (spork.trends/trends-from series)))
+        push-slice  (when sliced
+                      (fn push-slice [x]
+                        (let [nxt  (spork.trends/add-slice @data x)
+                              _    (reset! data nxt)                   
+                              ]
+                          nxt)))
         ;;need to change this to work with piccolo.
         ;; add-sample (if sliced (fn add-sample! [x]
         ;;                         (push-slice x)
@@ -241,6 +243,7 @@
               :push-slice push-slice
               :add-sample add-sample
               :plotarea   plotarea
+              :icon-layer  icon-layer
               :series series
               :width width
               :height height
@@ -276,16 +279,25 @@
 ;;and on top of that, we have dynamic nodes that move around
 ;;inside the plot.
 
+(defn ->icon [id coords nd]
+  {:id id
+   :position coords
+   :icon nd})
+
 ;;Icons are mobile nodes that live in a layer just above the
 ;;background of the plot.  Basically, we can inject dynamic
 ;;icons onto the plot, and move them dependently, or
 ;;independently of the plot.
-(defn add-icon [nd nm icon & {:keys [x y] :or [x 0 y 0]}]
-  (let [pa (:plotarea (p/node-meta nd))]
+(defn add-icons [nd xs]
+  (let [pa  (:icon-layer (p/node-meta nd))]
     (p/do-scene
-     (p/add-child! pa icon)
-;     (picc/translate! 
-     )))
+     (doseq [{:keys [id position icon]} xs]
+       (let [[x y] position]
+         (p/add-child pa icon)
+         (p/translate! icon x y))))
+    nd))
+(defn add-icon [nd x] (add-icons nd [x]))
+
 
 ;;all we need is a layer with the entities added...
 ;;it acts very similar to the gis protocol...
