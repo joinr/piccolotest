@@ -7,7 +7,7 @@
             [spork.graphics2d [debug :as debug] [image :as image]]
             [spork [sketch :as sketch] [trends :as trends] ]
             [spork.util.general]
-            [piccolotest.canvas :as canvas]))
+            [piccolotest [canvas :as canvas] [gis :as gis]]))
 
 ;;Note: I'm currently using the plot specifications from
 ;;spork.sketch, and rendering them into scenes using
@@ -298,7 +298,6 @@
     nd))
 (defn add-icon [nd x] (add-icons nd [x]))
 
-
 ;;all we need is a layer with the entities added...
 ;;it acts very similar to the gis protocol...
 
@@ -306,37 +305,108 @@
 ;; (defn ^java.awt.geom.Point2D$Double ->point [^double x ^double y]
 ;;   (java.awt.geom.Point2D$Double x y))
 
-(comment
-  (def ic (picc/->filled-rect :red 0 0 50 50))
-  (def p  (piccolotest.plots/plot-node :dot :title "Blah" :width 600 :height 600 :series shared/risk-series :xmax 600 :ymax 600))
-  (picc/add-child (:plotarea (picc/node-meta p)) ic)
-  ;;we have the state stored...
-  (def the-state  {:icons {:a [ic (atom [0 0])]}
-                           :plot  p})
-  (defn shift-origin [brd  nm]
-    (let [[nd xy] (get-in brd [:icons nm])
-          [x y]   @xy]
-      (do (picc/translate! nd (- x) (- y))
-          (reset! xy [0 0])
-          brd)))
-  (defn shift-entity [brd nm dx dy trail?]
-    (let [[nd x0y0] (get-in brd [:icons nm])
-          [x0 y0] @x0y0
-          x (+ x0 dx)
-          y (+ y0 dy)
-          newxy [x y]]
-      (do (when trail?
-            (let [plt  (:plot brd)
-                  add! (:add-sample (picc/node-meta plt))
-                  clr  (quilsample.bridge/color->risk
-                        (quilsample.bridge/default-cycle->color newxy))]
-              (add! [clr x y])))
-          (picc/translate! nd dx dy)
-          (reset! x0y0 newxy)
-          brd)))
+(defprotocol IScaled
+  (xy->uv [o xy])
+  (uv->xy [o uv]))
+
+;;all plots should probably be iconic plots....  
+(defrecord iconic-plot [icons plot-node add-sample xscale yscale]
+  p/IPiccNode
+  (as-node [this] plot-node)
+  (add-child [this nd] (do (p/add-child plot-node nd)
+                           this))
+  IScaled
+  ;;we need to inversely scale the shift...
+  (xy->uv [brd [x y]]    
+    [(* (/  1.0 xscale) x)
+     (* (/  1.0 yscale) y)])
+  (uv->xy [brd [u v]]    
+    [(*  xscale u)
+     (*  yscale v)])
+  gis/IMapBoard
+  (add-token  [b id tk]
+    (if (map? tk) ;[nd xy] pair
+      (let [{:keys [position icon]} tk
+            [x y] position
+            uv  (.xy->uv b position)  ;[(* x (/  1.0 xscale))
+                                        ;(* y (/  1.0 yscale))]
+            ]
+        (iconic-plot. (assoc icons id [icon (atom position)])
+                      (add-icon plot-node
+                                (assoc tk :position uv))
+                      add-sample
+                      xscale
+                      yscale
+                      ))))
+  (drop-token [b tk]  )
+  (add-place  [b k nd])
+  (drop-place [b k])
+  (place-node [b k target])
+  (get-node   [b k])
+  (get-coords [b k])
+  (tokens     [b] icons)
+  (places     [b] nil))
+
+(defn as-iconic [p]
+  (let [{:keys [xscale yscale height width add-sample get-color wipe]} (p/node-meta p)]
+    (->iconic-plot {} p add-sample xscale yscale)))
+
+(defn add! [^iconic-plot  brd x y clr]
+  (->> [clr x y]
+       ((.add-sample brd))))
+
+(defn shift-icon [^iconic-plot brd nm dx dy trail?]
+  (let [[nd x0y0] (get-in brd [:icons nm])
+        [x0 y0] @x0y0
+        x (+ x0 dx)
+        y (+ y0 dy)
+        newxy [x y]
+        [du dv] (xy->uv brd [dx dy])]
+    (do (when trail?
+          (let [;plt  (:plot-node brd)
+                                        ;add! (:add-sample (node-meta plt))
+                clr  (quilsample.bridge/color->risk
+                      (quilsample.bridge/default-cycle->color (xy->uv brd newxy)))]
+            (add! brd  x y clr)))
+        (p/translate nd du dv)
+        (reset! x0y0 newxy)
+        brd)))
+
+(defn shift-origin [brd  nm]
+  (let [[nd xy] (get-in brd [:icons nm])
+                                        ;[x y]   @xy
+        [u v]   (xy->uv brd @xy)
+        ]
+    (do (p/translate nd (- u) (- v))
+        (reset! xy [0 0])
+        brd)))
+
+(defn icon-xy [brd id]
+  @(second (get-in brd [:icons id])))
+
+(comment 
+(defn random-icons [n]
+  (map (fn [n]
+         (plots/->icon n [(rand) 0]
+                 (p/->image (rand-nth [shared/sicon shared/iicon shared/aicon]))))
+       (range n)))
+
+;;this is our template for our risk plot.
+(defn random-state [n]
+  (let [p (plots/plot-node :dot
+                     :title "Deployment Assessment"
+                     :xlabel "Proportion of Cycle Completed"
+                     :ylabel "BOG Days"
+                     :width 800 :height 600 :series shared/risk-series :xmax 1.0 :ymax 400)]
+    (->> (random-icons n)
+         (reduce (fn [acc tok]
+                   (gis/add-token acc (:id tok) tok))
+                 (plots/as-iconic p)))))
+
   (defmacro msg [name & body]
-    `(do ; (println ~name)
-         ~@body))
+    `(do ;(println ~name)
+       ~@body))
+  (def +scaled-step+ (/ 1 1095.0))
   (defn step-entity [brd nm]
     (let [[nd x0y0] (get-in brd [:icons nm])
           [x0 y0] @x0y0
@@ -346,27 +416,23 @@
                     (< (rand) 0.01))
               (msg "reset!" (shift-origin brd nm))
               (msg "bog"
-                   (shift-entity brd nm 0 1 (> (rand) 0.75))))
+                   (shift-icon brd nm 0 1 (< (rand) 0.3))))
             ;;deploy?
-            (and (>= x0 300)
+            (and (>= x0 0.25)
                  (< (rand) 0.001))
-            (msg "Deploy!" (shift-entity brd nm 0 1 (> (rand) 0.7)))
-            (>= x0 600)
+            (msg "Deploy!" (shift-icon brd nm 0 1 (< (rand) 0.3)))
+            (>= x0 1.0)
                (msg "reset-nodep" (shift-origin brd nm))
             :else
                (msg "dwell"
-                    (shift-entity brd nm 1 0 false)))))
-                     
- ;;testing layout functions and stuff.. Trying to fix
- ;;node picking, which seems to be erroneous.
- (->dynamic-plot :title    "helloa"
-                             :xlabel   "x"
-                             :ylabel   "y"
-                             :height    600
-                             :width     600
-                             :get-color (fn [_] :red)
-                             :name "The-plot"
-                             :xmax 600
-                             :ymax 600)
+                    (shift-entity brd nm +scaled-step+ 0 false)))))
+  (defn step! [brd]
+    (reduce step-entity brd (keys (:icons brd))))
+  (defn trail-test [n]
+    (let [the-state (random-state n)
+          _ (render! the-state)]
+      (dotimes [i 100000]
+        (step! the-state)
+        (Thread/sleep 16))))
+)
 
-  )
