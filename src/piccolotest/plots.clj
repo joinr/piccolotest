@@ -384,55 +384,5 @@
 (defn icon-xy [brd id]
   @(second (get-in brd [:icons id])))
 
-(comment 
-(defn random-icons [n]
-  (map (fn [n]
-         (plots/->icon n [(rand) 0]
-                 (p/->image (rand-nth [shared/sicon shared/iicon shared/aicon]))))
-       (range n)))
 
-;;this is our template for our risk plot.
-(defn random-state [n]
-  (let [p (plots/plot-node :dot
-                     :title "Deployment Assessment"
-                     :xlabel "Proportion of Cycle Completed"
-                     :ylabel "BOG Days"
-                     :width 800 :height 600 :series shared/risk-series :xmax 1.0 :ymax 400)]
-    (->> (random-icons n)
-         (reduce (fn [acc tok]
-                   (gis/add-token acc (:id tok) tok))
-                 (plots/as-iconic p)))))
-
-  (defmacro msg [name & body]
-    `(do ;(println ~name)
-       ~@body))
-  (def +scaled-step+ (/ 1 1095.0))
-  (defn step-entity [brd nm]
-    (let [[nd x0y0] (get-in brd [:icons nm])
-          [x0 y0] @x0y0
-          ]
-      (cond (pos? y0) ;;deployed, rise up.            
-            (if (or (>= y0 600)    
-                    (< (rand) 0.01))
-              (msg "reset!" (shift-origin brd nm))
-              (msg "bog"
-                   (shift-icon brd nm 0 1 (< (rand) 0.3))))
-            ;;deploy?
-            (and (>= x0 0.25)
-                 (< (rand) 0.001))
-            (msg "Deploy!" (shift-icon brd nm 0 1 (< (rand) 0.3)))
-            (>= x0 1.0)
-               (msg "reset-nodep" (shift-origin brd nm))
-            :else
-               (msg "dwell"
-                    (shift-entity brd nm +scaled-step+ 0 false)))))
-  (defn step! [brd]
-    (reduce step-entity brd (keys (:icons brd))))
-  (defn trail-test [n]
-    (let [the-state (random-state n)
-          _ (render! the-state)]
-      (dotimes [i 100000]
-        (step! the-state)
-        (Thread/sleep 16))))
-)
 
