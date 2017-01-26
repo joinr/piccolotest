@@ -355,22 +355,32 @@
   (->> [clr x y]
        ((.add-sample brd))))
 
-(defn shift-icon [^iconic-plot brd nm dx dy trail?]
-  (let [[nd x0y0] (get-in brd [:icons nm])
-        [x0 y0] @x0y0
+;;all we need is a way to compute the color from a point.
+#_(defn shift-icon [^iconic-plot brd nm dx dy trail?]
+  (let [[nd x0y0]  (get-in brd [:icons nm])
+        [x0 y0]    @x0y0
         x (+ x0 dx)
         y (+ y0 dy)
-        newxy [x y]
-        [du dv] (xy->uv brd [dx dy])]
+        newxy      [x y]
+        [du dv]    (xy->uv brd [dx dy])]
     (do (when trail?
-          (let [;plt  (:plot-node brd)
-                                        ;add! (:add-sample (node-meta plt))
-                clr  (quilsample.bridge/color->risk
+          (let [clr  (quilsample.bridge/color->risk
                       (quilsample.bridge/default-cycle->color (xy->uv brd newxy)))]
             (add! brd  x y clr)))
         (p/translate nd du dv)
         (reset! x0y0 newxy)
         brd)))
+
+(defn shift-icon [^iconic-plot brd nm dx dy]
+  (let [[nd x0y0]  (get-in brd [:icons nm])
+        [x0 y0]    @x0y0
+        x (+ x0 dx)
+        y (+ y0 dy)
+        newxy      [x y]
+        [du dv]    (xy->uv brd [dx dy])]
+    (p/translate nd du dv)
+    (reset! x0y0 newxy)
+    brd))
 
 (defn shift-origin [brd  nm]
   (let [[nd xy] (get-in brd [:icons nm])
@@ -384,5 +394,8 @@
 (defn icon-xy [brd id]
   @(second (get-in brd [:icons id])))
 
-
-
+(defn icon-uv [brd nm] (xy->uv brd (icon-xy brd nm)))
+(defn plot-by [^iconic-plot brd nm xy->clr]
+  (let [xy (icon-xy brd nm)
+        [x y] xy]
+    (add! brd  x y (xy->clr xy))))
