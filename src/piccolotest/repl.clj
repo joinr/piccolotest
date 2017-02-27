@@ -2,10 +2,16 @@
 ;;repl in compatible swing node form.
 (ns piccolotest.repl
   (:require [org.dipert.swingrepl.main]
-            [spork.util [clipboard :as clip]]
-            [spork.cljgui.components [swing :as swing]])
+            ;[spork.util [clipboard :as clip]]
+            ;[spork.cljgui.components [swing :as swing]]
+            )
   (:import [java.awt.event KeyEvent]
            [java.awt Robot]))
+
+;;really, this is all our dependencies boil down to.
+;;we don't event need the repl node in here.
+;;I vote for keeping it as a standalone
+;;dependency.
 
 (defmacro eval-repl
   "Imported from swingrepl. Evaluates expr on the 
@@ -13,7 +19,26 @@
    themselves."
   [rpl expr]
    `(org.dipert.swingrepl.main/eval-repl ~rpl ~expr))
-  
+
+(defn repl-panel
+  "Creates a swing-repl that we can send code to for remote 
+   evaluation, or allow the user to interactively eval 
+   expressions."
+  ([opts]
+   (org.dipert.swingrepl.main/make-repl-jconsole
+    (merge org.dipert.swingrepl.main/default-opts opts)))
+  ([w h]
+   (doto (repl-panel {})
+     (.setPreferredSize (java.awt.Dimension. w h))))
+  ([w h opts]
+   (doto (repl-panel opts)
+         (.setPreferredSize (java.awt.Dimension. w h)))))
+
+
+;;This is all commented out...
+
+(comment
+
 ;;so....o
 (comment 
 (def repl-in (clojure.java.io/reader))
@@ -30,58 +55,14 @@
          )))))
 (def txt (spork.cljgui.components.swing/text-field ""))
 )
-
-;;this is what jconsole does.
-;;if you don't provide an in, it'll create
-;;a pipedwriter, and then wrap it with a
-;;pipedreader.
-		;; inPipe = cin;
-		;; if (inPipe == null) {
-		;; 	PipedWriter pout = new PipedWriter();
-		;; 	out = new PrintWriter(pout);
-		;; 	try {
-		;; 		inPipe = new PipedReader(pout);
-		;; 	} catch (IOException e) {
-		;; 		print("Console internal error: " + e);
-		;; 	}
-		;; }
-
-;;Present the string as if the user entered
-;;a sequence of key-presses
-(defn repl-panel
-  ([opts]
-   (org.dipert.swingrepl.main/make-repl-jconsole
-    (merge org.dipert.swingrepl.main/default-opts opts)))
-  ([w h]
-   (doto (repl-panel {})
-     (.setPreferredSize (java.awt.Dimension. w h))))
-  ([w h opts]
-   (doto (repl-panel opts)
-         (.setPreferredSize (java.awt.Dimension. w h)))))
-
-;; (def repl-input (java.io.PipedWriter.))
-;; (def repl-in    (java.io.PipedReader. repl-input))
-
+  
 (defn test! []
   (let [r (repl-panel 800 600)]
     (swing/display-simple
      (swing/stack r
          (swing/button "interrupt!" (fn [e] (.interruptEvent r)))))))
 
-(comment 
-(defn paste-repl! [^String xs]  
-  (clip/paste! xs)
-  (doto (Robot.)
-    (.keyPress   KeyEvent/VK_CONTROL)
-    (.keyPress   KeyEvent/VK_V)
-    (.keyRelease KeyEvent/VK_V)
-    (.keyRelease KeyEvent/VK_CONTROL)
-    ))
-
-)
-
-
-      
+  
 (def codes
   '[KeyEvent/VK_0 \0
     KeyEvent/VK_1 \1
@@ -259,23 +240,33 @@
     KeyEvent/VK_X X
     KeyEvent/VK_Y Y
     KeyEvent/VK_Z Z])
-                
+  
+(defn paste-repl! [^String xs]  
+  (clip/paste! xs)
+  (doto (Robot.)
+    (.keyPress   KeyEvent/VK_CONTROL)
+    (.keyPress   KeyEvent/VK_V)
+    (.keyRelease KeyEvent/VK_V)
+    (.keyRelease KeyEvent/VK_CONTROL)
+    ))
+
+)
 
 ;;So...our good friends at beanshell, in all their OOP glory,
 ;;decided to make JConsole hide its REALLY useful "type" method,
 ;;which allows us to programatically push text to the
 ;;widget.
 (comment
-(defn make-repl-jframe
-  "Displays a JFrame with JConsole and attached REPL."
-  ([] (make-repl-jframe {}))
-  ([optmap]
+  (defn make-repl-jframe
+    "Displays a JFrame with JConsole and attached REPL."
+    ([] (make-repl-jframe {}))
+    ([optmap]
      (let [options (merge default-opts optmap)
            {:keys [title width height font on-close prompt init eval]} options
            jframe (doto (JFrame. title)
-                   (.setSize width height)
-                   (.setDefaultCloseOperation on-close)
-                   (.setLocationRelativeTo nil))
+                    (.setSize width height)
+                    (.setDefaultCloseOperation on-close)
+                    (.setLocationRelativeTo nil))
            eof (window-closing-dispatcher jframe)]
        (let [console (make-repl-jconsole
                       (merge
@@ -290,74 +281,73 @@
          (.requestFocus console)
          (.setVisible jframe true)))))
   
-(ns org.dipert.swingrepl.main
-  "Swing Clojure REPL using BeanShell's JConsole"
-  (:require clojure.main clojure.repl)
-  (:import (javax.swing JFrame)
-           (java.awt.event WindowEvent)
-           (java.awt Font)
-           (bsh.util JConsole))
-  (:gen-class))
+  (ns org.dipert.swingrepl.main
+    "Swing Clojure REPL using BeanShell's JConsole"
+    (:require clojure.main clojure.repl)
+    (:import (javax.swing JFrame)
+             (java.awt.event WindowEvent)
+             (java.awt Font)
+             (bsh.util JConsole))
+    (:gen-class))
 
-(def ^{:doc "Formatted Clojure version string"
-       :private true}
-     clj-version
-     (apply str (interpose \. (map *clojure-version* [:major :minor :incremental]))))
+  (def ^{:doc "Formatted Clojure version string"
+         :private true}
+    clj-version
+    (apply str (interpose \. (map *clojure-version* [:major :minor :incremental]))))
 
-(def ^{:doc "Default REPL options"
-       :private false}
-     default-opts
-     {:width 972
-      :height 400
-      :font (Font. "Monospaced" Font/PLAIN 14)
-      :title (str "Clojure " clj-version " REPL")
-      :prompt #(printf "%s=> " (ns-name *ns*))
-      :init #()
-      :eval eval
-      :on-close JFrame/DISPOSE_ON_CLOSE})
+  (def ^{:doc "Default REPL options"
+         :private false}
+    default-opts
+    {:width 972
+     :height 400
+     :font (Font. "Monospaced" Font/PLAIN 14)
+     :title (str "Clojure " clj-version " REPL")
+     :prompt #(printf "%s=> " (ns-name *ns*))
+     :init #()
+     :eval eval
+     :on-close JFrame/DISPOSE_ON_CLOSE})
 
-(def ^{:doc "Default debug REPL options"
-       :private false}
-     default-dbg-opts
-     {:title (str "Clojure " clj-version " Debug REPL")
-      :prompt #(print "dr => ")
-      :eval (comment "See make-dbg-repl-jframe")})
+  (def ^{:doc "Default debug REPL options"
+         :private false}
+    default-dbg-opts
+    {:title (str "Clojure " clj-version " Debug REPL")
+     :prompt #(print "dr => ")
+     :eval (comment "See make-dbg-repl-jframe")})
 
-(defn- make-repl-thread [console & repl-args]
-  (binding [*out* (.getOut console)
-            *in*  (clojure.lang.LineNumberingPushbackReader. (.getIn console))
-            *err* (.getOut console)]
-    (Thread. (bound-fn []
-               (apply clojure.main/repl repl-args)))))
+  (defn- make-repl-thread [console & repl-args]
+    (binding [*out* (.getOut console)
+              *in*  (clojure.lang.LineNumberingPushbackReader. (.getIn console))
+              *err* (.getOut console)]
+      (Thread. (bound-fn []
+                 (apply clojure.main/repl repl-args)))))
 
-(defn- window-closing-dispatcher [window]
-  #(.dispatchEvent window (WindowEvent. window WindowEvent/WINDOW_CLOSING)))
-
-
-(defn make-repl-jconsole
-  "Returns a JConsole component"
-  [options]
-  (let [{:keys [font prompt init eval eof]} options
-        console (bsh.util.JConsole. font)
-        thread (make-repl-thread console :prompt prompt :init init :eval eval)
-        stopper (clojure.repl/thread-stopper thread)]
-    (doto console
-      (.setInterruptFunction (fn [reason] (stopper reason)))
-      (.setEOFFunction eof))
-    (.start thread)
-    console))
+  (defn- window-closing-dispatcher [window]
+    #(.dispatchEvent window (WindowEvent. window WindowEvent/WINDOW_CLOSING)))
 
 
-(defn make-repl-jframe
-  "Displays a JFrame with JConsole and attached REPL."
-  ([] (make-repl-jframe {}))
-  ([optmap]
+  (defn make-repl-jconsole
+    "Returns a JConsole component"
+    [options]
+    (let [{:keys [font prompt init eval eof]} options
+          console (bsh.util.JConsole. font)
+          thread (make-repl-thread console :prompt prompt :init init :eval eval)
+          stopper (clojure.repl/thread-stopper thread)]
+      (doto console
+        (.setInterruptFunction (fn [reason] (stopper reason)))
+        (.setEOFFunction eof))
+      (.start thread)
+      console))
+
+  (defn make-repl-jframe
+    "Displays a JFrame with JConsole and attached REPL."
+    ([] (make-repl-jframe {}))
+    ([optmap]
      (let [options (merge default-opts optmap)
            {:keys [title width height font on-close prompt init eval]} options
            jframe (doto (JFrame. title)
-                   (.setSize width height)
-                   (.setDefaultCloseOperation on-close)
-                   (.setLocationRelativeTo nil))
+                    (.setSize width height)
+                    (.setDefaultCloseOperation on-close)
+                    (.setLocationRelativeTo nil))
            eof (window-closing-dispatcher jframe)]
        (let [console (make-repl-jconsole
                       (merge
@@ -372,26 +362,26 @@
          (.requestFocus console)
          (.setVisible jframe true)))))
 
-;; local-bindings and eval-with-locals are from http://gist.github.com/252421
-;; Inspired by George Jahad's version: http://georgejahad.com/clojure/debug-repl.html
-(defmacro local-bindings
-  "Produces a map of the names of local bindings to their values."
-  []
-  (let [symbols (map key @clojure.lang.Compiler/LOCAL_ENV)]
-    (zipmap (map (fn [sym] `(quote ~sym)) symbols) symbols)))
+  ;; local-bindings and eval-with-locals are from http://gist.github.com/252421
+  ;; Inspired by George Jahad's version: http://georgejahad.com/clojure/debug-repl.html
+  (defmacro local-bindings
+    "Produces a map of the names of local bindings to their values."
+    []
+    (let [symbols (map key @clojure.lang.Compiler/LOCAL_ENV)]
+      (zipmap (map (fn [sym] `(quote ~sym)) symbols) symbols)))
 
-(declare ^:dynamic *locals*)
-(defn eval-with-locals
-  "Evals a form with given locals. The locals should be a map of symbols to
+  (declare ^:dynamic *locals*)
+  (defn eval-with-locals
+    "Evals a form with given locals. The locals should be a map of symbols to
   values."
-  [locals form]
-  (binding [*locals* locals]
-    (eval
-      `(let ~(vec (mapcat #(list % `(*locals* '~%)) (keys locals)))
-         ~form))))
+    [locals form]
+    (binding [*locals* locals]
+      (eval
+       `(let ~(vec (mapcat #(list % `(*locals* '~%)) (keys locals)))
+          ~form))))
 
-(defmacro make-dbg-repl-jframe
-  "Displays a JFrame with JConsole and attached REPL. The frame has the context
+  (defmacro make-dbg-repl-jframe
+    "Displays a JFrame with JConsole and attached REPL. The frame has the context
   from wherever it has been called, effectively creating a debugging REPL.
   Usage:
     (use 'org.dipert.swingrepl.main)
@@ -399,15 +389,15 @@
     (foo 3)
   This will pop up the debugging REPL, you should be able to access the var 'a'
   from the REPL."
-  ([] `(make-dbg-repl-jframe {}))
-  ([optmap]
-   `(make-repl-jframe (merge
-      default-opts
-      default-dbg-opts
-      {:eval (partial eval-with-locals (local-bindings))}
-      ~optmap))))
+    ([] `(make-dbg-repl-jframe {}))
+    ([optmap]
+     `(make-repl-jframe (merge
+                         default-opts
+                         default-dbg-opts
+                         {:eval (partial eval-with-locals (local-bindings))}
+                         ~optmap))))
 
-(defn -main
-  [& args]
-(make-repl-jframe {:on-close JFrame/EXIT_ON_CLOSE}))
-)
+  (defn -main
+    [& args]
+    (make-repl-jframe {:on-close JFrame/EXIT_ON_CLOSE}))
+  )
