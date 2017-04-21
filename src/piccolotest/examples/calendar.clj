@@ -1,3 +1,5 @@
+(ns piccolotest.examples.calendar)
+
 ;;var clickedNode = event.pickedNodes[0];
 ;;var globalTransform = clickedNode.getGlobalTransform();   ;;globalToLocal? 
 ;;var inverse = globalTransform.getInverse();  ;;localToGlobal?

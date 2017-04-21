@@ -1,3 +1,6 @@
+;;Experimental table implementation.
+;;Child cells can be nodes, default
+;;is to provide rectangles.
 (ns piccolotest.table
   (:require [piccolotest.sample :refer :all])
   (:import  [org.piccolo2d PNode PLayer]

@@ -35,7 +35,8 @@
          (.setPreferredSize (java.awt.Dimension. w h)))))
 
 
-;;This is all commented out...
+;;This is all commented out schlock.  Unnecessary.
+;;#DEPRECATE
 
 (comment
 

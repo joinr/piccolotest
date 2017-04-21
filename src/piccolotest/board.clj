@@ -1,3 +1,6 @@
+;;Provides a piccolo node for creating abstract boards with
+;;name icons.  Also provides protocol functions for
+;;manipulating the board (moving icons by name).
 (ns piccolotest.board
   (:require [piccolotest.sample      :as    picc]
             [spork.graphics2d.canvas :as    canvas]))
