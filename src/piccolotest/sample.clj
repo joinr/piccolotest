@@ -56,6 +56,9 @@
   [& body]
   `(invoke-later! (~'fn [] (do ~@body))))
 
+(defn do-input! [^PCanvas cnv]
+  (.processInputs (.getRoot cnv)))
+
 ;;These may be giving us grief, since we're not on the edt...
 ;;note: we could queue up children for removal on the edt..
 ;;rather than spam the edt with tons of child removal requests,
@@ -244,6 +247,16 @@
 (defn ^PNode set-font! [^PText nd fnt]
   (doto nd
     (.setFont (font/get-font fnt))))
+
+(defn ^PBounds as-bounds [o]
+  (cond (instance? org.piccolo2d.util.PBounds o) o
+        (vector? o)
+          (let [[x y w h] o]
+            (PBounds. (double x) (double y) (double w) (double h)))
+        :else (throw (Exception. (str [:cannot-make-bounds o])))))
+
+(defn ^PNode set-bounds! [nd bnds]
+  (doto nd (.setBounds (as-bounds bnds))))
 
 (defn ^PNode invalidate! [^PNode nd]
   (doto nd
@@ -531,19 +544,22 @@
                      (do                                  
                        (vreset! old-scale newscale)
                        (scale! nd (/ 1.0 newscale)))))
-        lis (props/property-listener
-             {PCamera/PROPERTY_VIEW_TRANSFORM
-              (fn [old new]
-                (let [bnds (.getViewBounds cam)
-                      x (.getX bnds)
-                      y (.getY bnds)
-                      new-scale (.getViewScale cam)]
-                  (-> nd
-                      (translate-to! x y)
-                      (rescale! new-scale);(/ 1.0 new-scale))
-                      )))})]       
+        stick! (fn stick! []
+                 (let [bnds (.getViewBounds cam)
+                       x (.getX bnds)
+                       y (.getY bnds)
+                       new-scale (.getViewScale cam)]
+                   (-> nd
+                       (translate-to! x y)
+                       (rescale! new-scale);(/ 1.0 new-scale))
+                       )))
+        _   (stick!)]       
     (doto cam
-      (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM lis))))
+      (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM
+          (props/property-listener
+           {PCamera/PROPERTY_VIEW_TRANSFORM
+            (fn [old new]
+              (stick!))})))))
 
 
 ;;maybe rename this piccpanel?
@@ -607,26 +623,6 @@
                                _ (.addLayer cam l)]
                            l)))
   (active-camera [scn] (.getCamera ^PSwingCanvas scn)))
-
-(comment ;;testing
-  (defn mobj []
-    (let [m (atom nil)]
-      (reify Object
-        (toString [this] "blah")
-        (meta     [o] @m)
-        (withMeta [o  x]
-          (do (reset! m x) o)))))
-  
-  (def circles  (->layer))
-  (def controls (->layer [(gui/button "Howdy!" (fn [_] (add-child @canvas (->circle :blue (rand-int 600) (rand-int 600) 30 30))))]))
-  (render! [(->filled-rect :red 0 0 600 600) controls])
-  (->stick-to-camera controls (.getCamera @canvas))
-  ;;we'd like to create canvases that have special properties.
-  ;;namely, the ability to stick control widgets on a control layer....
-  ;;control layer will follow the camera.
-  ;;control layer will preserve its scale.
-  ;;control layer will draw last.
-  )
 
 ;;cameras give us additional views...
 (defn ^org.piccolo2d.PCamera ->camera []
@@ -831,7 +827,6 @@
     (doseq [n nodes]
       (add-child nd (as-node n)))
     nd))
-
 
 ;;generic pack functions....
 ;;try to fit nodes into a geometric space....
@@ -1299,7 +1294,13 @@
 (defn ^PPath ->ellipse [^double x ^double y ^double w ^double h]    (PPath/createEllipse x y w  h))
 ;(defn ^PPath ->line    [x y x2  y2]   (PPath/createLine    x y x2 y2))
 (defn ^PNode ->text    [^String txt]  (uncartesian!       (PText. txt)))
-                              
+
+(defmacro ->button-strip [kvps]
+  `(->shelf
+    ~@(for [[k v] (seq kvps)]
+        `(gui/button (str ~k)
+                     (fn [~'_] ~v)))))
+
 (def frame (atom nil))
 (def canvas (atom nil))
 
@@ -1399,7 +1400,8 @@
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer (events/as-listener handler)))
       (center! cnv)
-      (show!   cnv :menu menu)))
+      (show!   cnv :menu menu)
+      cnv))
 
 (defn render-raw!  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
@@ -1413,7 +1415,8 @@
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer (events/as-listener handler)))
 ;      (center! cnv)
-      (show! cnv)))
+      (show! cnv)
+      cnv))
 
 (defn node->canvas  [nd & {:keys [transform background handler]}]
     (let  [cnv (doto (->canvas)
@@ -1561,6 +1564,18 @@
   ([^PCamera cam ^PNode nd ^long zoomtime]  
    (.animateViewToTransform cam (.getGlobalTransform nd) true zoomtime))
   ([cam nd] (center-on! cam nd 0)))
+
+(defn ^PAffineTransform as-xform [obj]
+  (if (instance? org.piccolo2d.util.PAffineTransform obj)
+        obj
+        (.getGlobalTransform ^PNode (as-node obj))))
+
+;;this is really similar to center-xform!
+(defn animate-view-to-transform!
+  ([cam x zoomtime]
+   (.animateViewToTransform cam (as-xform x) true zoomtime))
+  ([cam x]
+   (animate-view-to-transform! cam x 0)))
 
 ;;This kinda works...more useful for simple zooming...
 (defn with-navigation [nd]

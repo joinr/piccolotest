@@ -1,4 +1,9 @@
-(ns piccolotest.examples.calendar)
+(ns piccolotest.examples.calendar
+  (:require [piccolotest.sample :as picc :refer :all]
+            [spork.cljgui.components.swing :as gui]
+            [piccolotest [events :as events]
+             [properties :as props]
+             [activities :as acts]]))
 
 ;;var clickedNode = event.pickedNodes[0];
 ;;var globalTransform = clickedNode.getGlobalTransform();   ;;globalToLocal? 
@@ -14,12 +19,10 @@
 (defn zoom-on-double-click [duration]
   (let [zoomtime (long duration)
         zoom-to  (fn zoom-to [cam ^PNode nd]
-                   (.animateViewToTransform cam (global-transform  nd)
-                                            zoomtime))
+                   (animate-view-to-transform! cam nd zoomtime))
                    ]
     {:mouseClicked (fn [e]
-                     (when (and (events/left-click? e)
-                                (events/double-click? e))
+                     (when (events/double-left-click? e)
                        (let [nd (events/picked-node e)]
                          (zoom-to (events/camera e) nd))))}))
 
@@ -101,22 +104,123 @@
                     (find-up new-focus #(types-test ['Day 'Month])))]
     (when-not (identical? last-focus new-focus)
       (zoom-to cam new-focus))))
-                       
-(defn zoom-hierarchically [base-layer find-next duration]
-  (let [zoomtime (long duration)
-        newFocus  (atom base-layer)
-        lastFocus (atom @newFocus)
+
+;;months contain days...
+;;days contain?
+(def month-width 600)
+(def column-width (/ 600 7.0))
+
+
+(defn ->task-list [xs]
+  (with-node-meta
+    (->>  xs
+          (map (comp ->cartesian ->text))
+          (apply ->spaced-stack 30.0))
+    {:type :task}))
+
+(defn ->day
+  ([number tasks]
+   (let [color (if number
+                 (if (pos? (count tasks))
+                   #_:white      [255 255 255]
+                   #_:light-grey [235 235 235])
+                 #_:dark-grey  [200 200 200])
+         parent (-> (->layer)
+                    (set-paint! color)
+                    (set-bounds! [0 0 (* column-width 5) 500])
+                    (add-child (->> (->text (str number))
+                                    (->scale 5 5)
+                                    (->translate 10 10)
+                                    (->cartesian))))]        
+     (if tasks
+       (add-child parent
+                  (->> (->task-list tasks)
+                       (->translate 10 70 #_130)))
+       parent)))
+  ([number] (->day number nil)))
         
-        zoom-to  (fn zoom-to [cam ^PNode nd]
-                   (let [newf 
-                   (.animateViewToTransform cam (global-transform  nd)
-                                            zoomtime))
-                   ]
-    {:mouseClicked (fn [e]
-                     (when (and (events/left-click? e)
-                                (events/double-click? e))
-                       (let [nd (events/picked-node e)]
-                         (zoom-to (events/camera e) nd))))}))
+;;currently identical to original implementation.
+(defn ->week-labels []
+  (->> ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+       (map   ->text)
+       (map   ->cartesian)
+       (map-indexed  #(->translate (* column-width %1) 50 %2))
+       (map #(highlight-bounds! % :blue))
+       (->layer)
+       #_(apply ->spaced-shelf column-width)))
+  
+(defn ->month [year month]
+  (let [color [200 200 200]
+        bounds [0 0 month-width 570]
+        ]
+    )
+  )
+    
+
+    var Month = PNode.subClass({
+      init: function (year, month) {
+        this._super({
+          bounds: new PBounds(0, 0, monthWidth, 570),
+          fillStyle: "rgb(200, 200, 200)"
+        });
+
+        this.addChild(new PText(Month.monthNames[month]).scale(2).translate(5, 5));
+
+        var dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        for (var dayIndex = 0; dayIndex < dayNames.length; dayIndex++) {
+          this.addChild(new PText(dayNames[dayIndex]).translate(dayIndex * columnWidth, 50).scale(0.7));
+        }
+
+        this.firstDay = Date.build(year, month, 1);
+        this.lastDay = Date.build(year, month + 1, 0);
+
+        var daysInMonth = Math.ceil(this.lastDay.getDate() - this.firstDay.getDate() - 1);
+
+        var columnNumber = Math.abs(this.firstDay.getDay());
+        var currentY = 70;
+        var currentDay = 0;
+
+        var tasks = ["Get Milk", "Phone Mom", "Call Work", "Run Tests", "Investigate Fridge Humming"];
+
+        do {
+          var randomTasks = [];
+          var randomCount = Math.floor(Math.random() * tasks.length);
+          for (var i = 0; i < randomCount; i++) {
+            randomTasks.push(tasks[Math.floor(Math.random() * tasks.length)]);
+          }
+
+          var dayLabel = (currentDay < 0) ? "" : (currentDay + 1);
+          this.addChild(new Day(dayLabel, randomTasks).translate(columnNumber++ * columnWidth, currentY).scale(0.2));
+
+          columnNumber %= 7;
+
+          if (columnNumber === 0) {
+            currentY += 100;
+          }
+        } while (currentDay++ <= daysInMonth);
+
+        this.bounds = this.getFullBounds();
+      },
+
+    });
+    Month.monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+
+
+
+;; (defn zoom-hierarchically [base-layer find-next duration]
+;;   (let [zoomtime  (long duration)
+;;         newFocus  (atom base-layer)
+;;         lastFocus (atom @newFocus)
+;;         zoom-to  (fn zoom-to [cam ^PNode nd]
+;;                    (let [newf 
+;;                          (animate-view-to-transform! cam (global-transform  nd)
+;;                                                      zoomtime))
+;;                    ]
+;;     {:mouseClicked (fn [e]
+;;                      (when (events/double/left-click? e)
+;;                        (let [nd (events/picked-node e)]
+;;                          (zoom-to (events/camera e) nd))))}))
 
    ;; function zoomTo(newFocus) {
    ;;    if (newFocus === null) {
