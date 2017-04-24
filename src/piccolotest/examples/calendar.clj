@@ -271,7 +271,7 @@
 (def last-sample (atom nil))
 ;;could this be a node itself?  All it has to
 ;;do is install listeners on child...
-(defn ->zoomer [base-layer find-pred zoomtime]
+(defn ->zoomer [base-layer zoomtime]
   (let [focus      (atom base-layer)
         last-focus (atom base-layer)
         zoom-to    (fn zoom-to [cam new-focus]
@@ -285,13 +285,16 @@
                                              (/ (- (.height cam-bounds) (.height focus-bounds)) 2.0))
                            _ (println [:zooming-to (reset! last-sample
                                                            {:global global-xform :inv inv :cam cam-bounds :focus focus-bounds})])]
-                       (animate-view-to-transform! cam global-xform #_inv zoomtime)))
-        zoom-out  (fn zoom-out []
-                    (let [_ (println [:zooming-out])
-                          new-foc (or (find-up (.getParent @last-focus) find-pred)
+                       (if (identical? new-focus base-layer)
+                         (center-on! cam new-focus zoomtime)
+                         (animate-view-to-transform! cam global-xform #_inv zoomtime))))
+                      
+        zoom-out  (fn zoom-out [cam]
+                    (let [new-foc (or (find-up (.getParent @last-focus) (property-filter :type #{:month}))
                                       base-layer)
+                          _ (println [:zooming-out (if (identical? new-foc base-layer) :base (node-meta new-foc))])
                           _ (reset! focus new-foc)]
-                      (zoom-to new-foc)))]
+                      (zoom-to cam new-foc)))]
     {:focus      focus
      :last-focus last-focus
      :zoom-to    zoom-to
@@ -337,29 +340,25 @@
     ;;                              }
 
 (defn zoom-hierarchically [base-layer duration]
-  (let [property-filter (fn [k filter]
-                          (fn property-filter [nd]
-                            (when-let [res (get (node-meta nd) k)]
-                              (filter res))))
-        zoomtime  (long duration)
-        zoomer    (->zoomer base-layer (property-filter :type #{:day :month}) duration)
+  (let [zoomtime  (long duration)
+        zoomer    (->zoomer base-layer #_(property-filter :type #{:day :month}) duration)
        {:keys [zoom-to zoom-out last-focus focus]} zoomer]
     {:mouseClicked
      (fn [e]
        (cond (events/left-click? e)
              (let [nd (events/picked-node e)
-                   _ (println [:left-click nd (node-meta nd)])
+                   _  (println [:left-click nd (node-meta nd)])
                    new-focus ;(if (or (nil? @last-focus)
                               ;       (instance?  org.piccolo2d.PLayer @last-focus))
                                ;(do (println [:looking-month])
                                 ;   (find-up nd  (property-filter :type #{:month})))
-                   (or (find-up nd  (property-filter :type #{:day :month}))
+                   (or (find-up nd (property-filter :type #{:day :month}))
                        base-layer)
                                         ;)
                    _ (println [:found new-focus (node-meta new-focus)])]
                  (when-not (identical? @last-focus new-focus)
                    (zoom-to (events/camera e) new-focus)))
-               (events/right-click? e)  (zoom-out)
+               (events/right-click? e)  (zoom-out (events/camera e))
                :else true))}))
 
 

@@ -113,6 +113,11 @@
   (node-meta [obj]         (.getAttribute obj "meta"))
   (with-node-meta [obj m]  (.addAttribute obj "meta" m) obj))
 
+(defn property-filter  [k pred]
+  (fn property-filter [nd]
+    (when-let [res (get (node-meta nd) k)]
+      (pred res))))
+
 ;;the problem we're currently having is extending node-like functionality
 ;;to things defined earlier, namely things that extend the
 ;;spork.graphics2d.canvas.IShape protocol.
@@ -1400,8 +1405,9 @@
                                     (.setPaint (.getCamera cnv) background)))]
       (add-child! layer (as-node nd))
       (when handler (.addInputEventListener layer (events/as-listener handler)))
-      (center! cnv)
+      (println (get-full-bounds layer))
       (show!   cnv :menu menu)
+      (center! cnv)
       cnv))
 
 (defn render-raw!  [nd & {:keys [transform background handler]}]
