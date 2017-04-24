@@ -62,36 +62,7 @@
   (if (or (nil? nd) (test nd)) nd
       (find-up (node-parent nd) test)))
 
-    ;; layer.addListener({
-    ;;   click: function (event) {
-    ;;     var newFocus;
-
-    ;;     ;;get the new focus, which is whatever got picked.
-    ;;     newFocus = event.pickedNodes[0];
-
-    ;;     ;;compute the nextcandidate based on the pick.
-    ;;     if (lastFocus == null || lastFocus instanceof PLayer) {
-    ;;       ;;if we lost focus, or we're at the player, look for the
-    ;;       ;;nearest containing month.                                                     
-    ;;       newFocus = findUp(newFocus, typesTest([Month]));
-    ;;     } else { ;look for a day or month node...
-    ;;       newFocus = findUp(newFocus, typesTest([Day, Month]));
-    ;;     }
-
-    ;;     ;;if the next candidate is different than the current, zoom to it.
-    ;;     if (lastFocus !== newFocus) {
-    ;;       zoomTo(newFocus);
-    ;;       return true;
-    ;;     }
-    ;;                            },
-                       
-    ;;   ;;zoom out on right clicks.
-    ;;   mouseup: function (event) {
-    ;;     if (event.event.button === 2) {
-    ;;       zoomOut();
-    ;;       return true;
-    ;;     }
-    ;;                              }
+  
 
 ;;note: all the useful pan/zoom transforms for cameras
 ;;apply equally as well to arbitrary nodes...since the view bounds is                        
@@ -268,7 +239,7 @@
    ;;    camera.animateViewToTransform(inverse, 500);
    ;;  }
 
-(defn ->zoom-to [base-layer new-focus old-focus]
+#_(defn ->zoom-to [base-layer new-focus old-focus]
   (fn zoom-to [cam ^PNode new-focus]
     (let [new-focus (or new-focus base-layer)
           _         (reset! lastFocus new-focus)
@@ -290,32 +261,106 @@
 
 ;;    zoomTo(newFocus);
 ;;  }
-(defn ->zoom-out [base-layer new-focus last-focus zoom-to]
+#_(defn ->zoom-out [base-layer new-focus last-focus zoom-to]
   (fn zoom-out []
     (let [new-foc (or (find-up (.getParent @last-focus) (types-test [:day :month :layer]))
                       base-layer)
           _ (reset! new-focus new-foc)]
       (zoom-to new-foc))))
 
+(def last-sample (atom nil))
+;;could this be a node itself?  All it has to
+;;do is install listeners on child...
+(defn ->zoomer [base-layer find-pred zoomtime]
+  (let [focus      (atom base-layer)
+        last-focus (atom base-layer)
+        zoom-to    (fn zoom-to [cam new-focus]
+                     (let [new-focus    (or new-focus base-layer)
+                           _            (reset! last-focus new-focus)
+                           global-xform (global-transform new-focus)
+                           inv          (inverse global-xform)
+                           cam-bounds   (get-bounds cam)
+                           focus-bounds (get-full-bounds new-focus)
+                           _ (.translate inv (/ (- (.width cam-bounds)  (.width focus-bounds)) 2.0)
+                                             (/ (- (.height cam-bounds) (.height focus-bounds)) 2.0))
+                           _ (println [:zooming-to (reset! last-sample
+                                                           {:global global-xform :inv inv :cam cam-bounds :focus focus-bounds})])]
+                       (animate-view-to-transform! cam global-xform #_inv zoomtime)))
+        zoom-out  (fn zoom-out []
+                    (let [_ (println [:zooming-out])
+                          new-foc (or (find-up (.getParent @last-focus) find-pred)
+                                      base-layer)
+                          _ (reset! focus new-foc)]
+                      (zoom-to new-foc)))]
+    {:focus      focus
+     :last-focus last-focus
+     :zoom-to    zoom-to
+     :zoom-out   zoom-out}))
 
-  
-(defn zoom-hierarchically [base-layer find-next duration]
-  (let [zoomtime  (long duration)
-        newFocus  (atom base-layer)
-        lastFocus (atom @newFocus)
-        zoom-to   (->zoomer base-layer new-focus old-focus)]
-    {:mouseClicked (fn [e]
-                     (when (events/double/left-click? e)
-                       (let [nd (events/picked-node e)]
-                         (zoom-to (events/camera e) nd))))}))
+;;  var backButton = new PImage("http://allain.github.io/piccolo2d.js/examples/zoom-out.png");
+;;  backButton.addListener({
+;;    'click': function(event) {
+;;      zoomOut();
+;;      return true;
+;;    }
+;;  });
 
-   ;;  var backButton = new PImage("http://allain.github.io/piccolo2d.js/examples/zoom-out.png");
-   ;;  backButton.addListener({
-   ;;    'click': function(event) {
-   ;;      zoomOut();
-   ;;      return true;
-   ;;    }
-   ;;  });
+  ;; layer.addListener({
+    ;;   click: function (event) {
+    ;;     var newFocus;
+
+    ;;     ;;get the new focus, which is whatever got picked.
+    ;;     newFocus = event.pickedNodes[0];
+
+    ;;     ;;compute the nextcandidate based on the pick.
+    ;;     if (lastFocus == null || lastFocus instanceof PLayer) {
+    ;;       ;;if we lost focus, or we're at the player, look for the
+    ;;       ;;nearest containing month.                                                     
+    ;;       newFocus = findUp(newFocus, typesTest([Month]));
+    ;;     } else { ;look for a day or month node...
+    ;;       newFocus = findUp(newFocus, typesTest([Day, Month]));
+    ;;     }
+
+    ;;     ;;if the next candidate is different than the current, zoom to it.
+    ;;     if (lastFocus !== newFocus) {
+    ;;       zoomTo(newFocus);
+    ;;       return true;
+    ;;     }
+    ;;                            },
+                       
+    ;;   ;;zoom out on right clicks.
+    ;;   mouseup: function (event) {
+    ;;     if (event.event.button === 2) {
+    ;;       zoomOut();
+    ;;       return true;
+    ;;     }
+    ;;                              }
+
+(defn zoom-hierarchically [base-layer duration]
+  (let [property-filter (fn [k filter]
+                          (fn property-filter [nd]
+                            (when-let [res (get (node-meta nd) k)]
+                              (filter res))))
+        zoomtime  (long duration)
+        zoomer    (->zoomer base-layer (property-filter :type #{:day :month}) duration)
+       {:keys [zoom-to zoom-out last-focus focus]} zoomer]
+    {:mouseClicked
+     (fn [e]
+       (cond (events/left-click? e)
+             (let [nd (events/picked-node e)
+                   _ (println [:left-click nd (node-meta nd)])
+                   new-focus ;(if (or (nil? @last-focus)
+                              ;       (instance?  org.piccolo2d.PLayer @last-focus))
+                               ;(do (println [:looking-month])
+                                ;   (find-up nd  (property-filter :type #{:month})))
+                   (or (find-up nd  (property-filter :type #{:day :month}))
+                       base-layer)
+                                        ;)
+                   _ (println [:found new-focus (node-meta new-focus)])]
+                 (when-not (identical? @last-focus new-focus)
+                   (zoom-to (events/camera e) new-focus)))
+               (events/right-click? e)  (zoom-out)
+               :else true))}))
 
 
 
@@ -330,3 +375,8 @@
    :mouseExited  nil}
   )
 
+
+(defn render-cal []
+  (let [months (->spaced-shelf 90 (->month 2017 1) (->month 2017 2))
+        zooming (zoom-hierarchically months 500)]
+    (picc/render! months :handler zooming)))

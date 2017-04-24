@@ -256,6 +256,7 @@
           :else (throw (Exception. (str [:cannot-make-bounds o])))))
 
 (defn ^PBounds get-bounds [^PNode o] (.getBounds o)) 
+(defn ^PBounds get-full-bounds [^PNode o] (.getFullBounds o)) 
 
 (defn ^PNode set-bounds! [nd bnds]
   (doto nd (.setBounds (as-bounds bnds))))
@@ -1562,12 +1563,13 @@
 
 (defn center-xform!
   ([^PCamera cam ^PNode nd ^long zoomtime]  
-   (.animateViewToTransform cam (.getGlobalTransform nd) true zoomtime))
+   (.animateViewToTransform cam (.getGlobalTransform nd) zoomtime))
   ([cam nd] (center-on! cam nd 0)))
 
 (defn ^PAffineTransform as-xform [obj]
-  (if (instance? org.piccolo2d.util.PAffineTransform obj)
-        obj
+  (if (or (instance? org.piccolo2d.util.PAffineTransform obj)
+          (instance? java.awt.geom.AffineTransform obj))
+          obj
         (.getGlobalTransform ^PNode (as-node obj))))
 
 (defn ^PAffineTransform inverse [inv]
@@ -1576,7 +1578,7 @@
 ;;this is really similar to center-xform!
 (defn animate-view-to-transform!
   ([cam x zoomtime]
-   (.animateViewToTransform cam (as-xform x) true zoomtime))
+   (.animateViewToTransform cam (as-xform x) zoomtime))
   ([cam x]
    (animate-view-to-transform! cam x 0)))
 
