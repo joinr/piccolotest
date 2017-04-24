@@ -1,6 +1,7 @@
 (ns piccolotest.examples.calendar
   (:require [piccolotest.sample :as picc :refer :all]
             [spork.cljgui.components.swing :as gui]
+            [spork.util.datetime :as date]
             [piccolotest [events :as events]
              [properties :as props]
              [activities :as acts]]))
@@ -18,7 +19,7 @@
 ;;Maybe allow the backspace to revert to the previous coords.
 (defn zoom-on-double-click [duration]
   (let [zoomtime (long duration)
-        zoom-to  (fn zoom-to [cam ^PNode nd]
+        zoom-to  (fn zoom-to [cam ^org.piccolo2d.PNode nd]
                    (animate-view-to-transform! cam nd zoomtime))
                    ]
     {:mouseClicked (fn [e]
@@ -98,7 +99,7 @@
 ;;operations....so the language could be "cover" or "move-to-cover"
 ;;Thus, if I cover something with a camera or an arbitray object,                        
 ;;I'm performing an operation on its bounds...
-(defn container-zoom [cam last-focus new-focus] 
+#_(defn container-zoom [cam last-focus new-focus] 
   (let [new-focus (if (or (nil? last-focus) (instance? last-focus PLayer))
                     (find-up new-focus #(types-test % ['Month]))
                     (find-up new-focus #(types-test ['Day 'Month])))]
@@ -110,13 +111,20 @@
 (def month-width 600)
 (def column-width (/ 600 7.0))
 
+(def month-names
+  ["January", "February", "March", "April", "May", "June",
+   "July", "August", "September", "October", "November", "December"])
+(def tasks ["Get Milk", "Phone Mom", "Call Work", "Run Tests", "Investigate Fridge Humming"])
+
+
+(defn tag-node [tag nd]
+  (with-node-meta nd {:type tag}))
 
 (defn ->task-list [xs]
-  (with-node-meta
     (->>  xs
           (map (comp ->cartesian ->text))
-          (apply ->spaced-stack 30.0))
-    {:type :task}))
+          (apply ->spaced-stack 30.0)
+          (tag-node :task)))
 
 (defn ->day
   ([number tasks]
@@ -131,98 +139,120 @@
                     (add-child (->> (->text (str number))
                                     (->scale 5 5)
                                     (->translate 10 10)
-                                    (->cartesian))))]        
+                                    (->cartesian)))
+                    )]        
      (if tasks
        (add-child parent
                   (->> (->task-list tasks)
                        (->translate 10 70 #_130)))
        parent)))
   ([number] (->day number nil)))
-        
+
+(def days-of-week
+  ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+
 ;;currently identical to original implementation.
-(defn ->week-labels []
-  (->> ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+(defn ->day-labels []
+  (->> days-of-week
        (map   ->text)
        (map   ->cartesian)
        (map-indexed  #(->translate (* column-width %1) 50 %2))
-       (map #(highlight-bounds! % :blue))
        (->layer)
        #_(apply ->spaced-shelf column-width)))
-  
-(defn ->month [year month]
-  (let [color [200 200 200]
-        bounds [0 0 month-width 570]
-        ]
-    )
-  )
-    
 
-    var Month = PNode.subClass({
-      init: function (year, month) {
-        this._super({
-          bounds: new PBounds(0, 0, monthWidth, 570),
-          fillStyle: "rgb(200, 200, 200)"
-        });
+    ;; var Month = PNode.subClass({
+    ;;   init: function (year, month) {
+    ;;     this._super({
+    ;;       bounds: new PBounds(0, 0, monthWidth, 570),
+    ;;       fillStyle: "rgb(200, 200, 200)"
+    ;;     });
 
-        this.addChild(new PText(Month.monthNames[month]).scale(2).translate(5, 5));
+    ;;     this.addChild(new PText(Month.monthNames[month]).scale(2).translate(5, 5));
 
-        var dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-        for (var dayIndex = 0; dayIndex < dayNames.length; dayIndex++) {
-          this.addChild(new PText(dayNames[dayIndex]).translate(dayIndex * columnWidth, 50).scale(0.7));
-        }
+    ;;     var dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    ;;     for (var dayIndex = 0; dayIndex < dayNames.length; dayIndex++) {
+    ;;       this.addChild(new PText(dayNames[dayIndex]).translate(dayIndex * columnWidth, 50).scale(0.7));
+    ;;     }
 
-        this.firstDay = Date.build(year, month, 1);
-        this.lastDay = Date.build(year, month + 1, 0);
+    ;;     this.firstDay = Date.build(year, month, 1);
+    ;;     this.lastDay = Date.build(year, month + 1, 0);
 
-        var daysInMonth = Math.ceil(this.lastDay.getDate() - this.firstDay.getDate() - 1);
+    ;;     var daysInMonth = Math.ceil(this.lastDay.getDate() - this.firstDay.getDate() - 1);
 
-        var columnNumber = Math.abs(this.firstDay.getDay());
-        var currentY = 70;
-        var currentDay = 0;
-
-        var tasks = ["Get Milk", "Phone Mom", "Call Work", "Run Tests", "Investigate Fridge Humming"];
-
-        do {
-          var randomTasks = [];
-          var randomCount = Math.floor(Math.random() * tasks.length);
-          for (var i = 0; i < randomCount; i++) {
-            randomTasks.push(tasks[Math.floor(Math.random() * tasks.length)]);
-          }
-
-          var dayLabel = (currentDay < 0) ? "" : (currentDay + 1);
-          this.addChild(new Day(dayLabel, randomTasks).translate(columnNumber++ * columnWidth, currentY).scale(0.2));
-
-          columnNumber %= 7;
-
-          if (columnNumber === 0) {
-            currentY += 100;
-          }
-        } while (currentDay++ <= daysInMonth);
-
-        this.bounds = this.getFullBounds();
-      },
-
-    });
-    Month.monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    ;;     var columnNumber = Math.abs(this.firstDay.getDay());
+    ;;     var currentY = 70;
+    ;;     var currentDay = 0;
 
 
+(defn day-stream [init-day]
+  (let [week      (atom 0)
+        get-week! (fn [dow]
+                    (if (== dow 6)
+                      (let [res @week
+                            _  (swap! week inc)]
+                        res)
+                      @week))]
+    (->> (range 7) ;dow-indices
+         (cycle)   ;repeat
+         (drop init-day) ;start at init-day
+         (map-indexed
+          (fn [dom dow]
+            {:day-of-month dom
+             :day-of-week dow
+             :week  (get-week! dow)
+             :label (days-of-week dow)})))))
+
+(defn month->indexed-days [year month]
+  (let [first-day     (date/simple-date year month 1)
+        last-day      (date/simple-date year (inc month) 0)
+        days-in-month (- (.getDate last-day)
+                         (.getDate first-day))
+        init-day      (.getDay first-day)];;0-6=>S-Sa
+    (->> (day-stream init-day)
+         (map #(assoc % :year year :month month))
+         (take days-in-month))))
+
+;;Note: using getDay is deprecated....should be going to
+;;gregorian calendar.
+(defn ->month
+  [year month & {:keys [day->tasks]
+                 :or {day->tasks (fn [d]
+                                   (when (> (rand) 0.2)
+                                     (repeatedly (max 1 (rand-int 5))
+                                                 (fn [] (rand-nth tasks)))))}}]
+  (let [color         [200 200 200]
+        bounds        [0 0 month-width 570]
+        first-day     (date/simple-date year month 1)
+        last-day      (date/simple-date year (inc month) 0)
+        days-in-month (- (.getDate last-day)
+                         (.getDate first-day))
+        month-node    (-> (->> (->text (get month-names (dec month)))
+                               (->cartesian)
+                               (->scale     2 2)
+                               (->translate 5 5))
+                          (set-bounds! bounds)
+                          (set-paint!  color)
+                          (add-child   (->day-labels)))
+        init-y         70
+        row-height     100
+        row-scale      0.2
+        get-xy       (fn [week dow]
+                       [(* dow column-width)
+                        (+ (* week row-height) init-y)])]
+    (->> (for [{:keys [day-of-week day-of-month week label]}
+               (month->indexed-days year month)]
+           (let [[x y] (get-xy week day-of-week)]
+             (->> (-> (->day day-of-month (day->tasks day-of-month))
+                      (highlight-bounds! :black))
+                  (tag-node :day)
+                  (->scale row-scale row-scale)
+                  (->translate x y))))
+         (add-children month-node)
+         (tag-node :month))))    
 
 
-;; (defn zoom-hierarchically [base-layer find-next duration]
-;;   (let [zoomtime  (long duration)
-;;         newFocus  (atom base-layer)
-;;         lastFocus (atom @newFocus)
-;;         zoom-to  (fn zoom-to [cam ^PNode nd]
-;;                    (let [newf 
-;;                          (animate-view-to-transform! cam (global-transform  nd)
-;;                                                      zoomtime))
-;;                    ]
-;;     {:mouseClicked (fn [e]
-;;                      (when (events/double/left-click? e)
-;;                        (let [nd (events/picked-node e)]
-;;                          (zoom-to (events/camera e) nd))))}))
 
-   ;; function zoomTo(newFocus) {
+ ;; function zoomTo(newFocus) {
    ;;    if (newFocus === null) {
    ;;      newFocus = layer;
    ;;    }
@@ -238,16 +268,46 @@
    ;;    camera.animateViewToTransform(inverse, 500);
    ;;  }
 
-   ;;  function zoomOut() {
-   ;;    var newFocus = findUp(lastFocus.parent, typesTest([Day, Month, PLayer]));
+(defn ->zoom-to [base-layer new-focus old-focus]
+  (fn zoom-to [cam ^PNode new-focus]
+    (let [new-focus (or new-focus base-layer)
+          _         (reset! lastFocus new-focus)
+          global-xform (global-transform new-focus)
+          inv          (inverse global-xform)
+          cam-bounds   (get-bounds cam)
+          focus-bounds (get-bounds new-focus)
+          _ (.translate inv (/ (- (.width cam-bounds)  (.width focus-bounds)) 2.0)
+                        (/ (- (.height cam-bounds) (.height focus-bounds)) 2.0))]
+      (animate-view-to-transform! cam inv zoomtime))))
 
-   ;;    if (newFocus === null) {
-   ;;      newFocus = layer;
-   ;;    }
+;;  function zoomOut() {
+;;    var newFocus = findUp(lastFocus.parent, typesTest([Day, Month, PLayer]));
+
+;;    if (newFocus === null) {
+;;      newFocus = layer;
+;;    }
 
 
-   ;;    zoomTo(newFocus);
-   ;;  }
+;;    zoomTo(newFocus);
+;;  }
+(defn ->zoom-out [base-layer new-focus last-focus zoom-to]
+  (fn zoom-out []
+    (let [new-foc (or (find-up (.getParent @last-focus) (types-test [:day :month :layer]))
+                      base-layer)
+          _ (reset! new-focus new-foc)]
+      (zoom-to new-foc))))
+
+
+  
+(defn zoom-hierarchically [base-layer find-next duration]
+  (let [zoomtime  (long duration)
+        newFocus  (atom base-layer)
+        lastFocus (atom @newFocus)
+        zoom-to   (->zoomer base-layer new-focus old-focus)]
+    {:mouseClicked (fn [e]
+                     (when (events/double/left-click? e)
+                       (let [nd (events/picked-node e)]
+                         (zoom-to (events/camera e) nd))))}))
 
    ;;  var backButton = new PImage("http://allain.github.io/piccolo2d.js/examples/zoom-out.png");
    ;;  backButton.addListener({

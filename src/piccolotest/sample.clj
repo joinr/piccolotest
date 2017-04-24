@@ -253,7 +253,9 @@
         (vector? o)
           (let [[x y w h] o]
             (PBounds. (double x) (double y) (double w) (double h)))
-        :else (throw (Exception. (str [:cannot-make-bounds o])))))
+          :else (throw (Exception. (str [:cannot-make-bounds o])))))
+
+(defn ^PBounds get-bounds [^PNode o] (.getBounds o)) 
 
 (defn ^PNode set-bounds! [nd bnds]
   (doto nd (.setBounds (as-bounds bnds))))
@@ -261,8 +263,6 @@
 (defn ^PNode invalidate! [^PNode nd]
   (doto nd
     (.invalidatePaint)))
-
-
 
 ;;so layers can act like groups.  They are also nodes...
 (defn ->layer
@@ -1569,6 +1569,9 @@
   (if (instance? org.piccolo2d.util.PAffineTransform obj)
         obj
         (.getGlobalTransform ^PNode (as-node obj))))
+
+(defn ^PAffineTransform inverse [inv]
+  (.createInverse (as-xform inv)))
 
 ;;this is really similar to center-xform!
 (defn animate-view-to-transform!
