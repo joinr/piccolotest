@@ -31,7 +31,8 @@
                                         ; background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
      (with-node-meta
        (ctor (->layer (map second cell-data)))
-       {:cells cells}))))
+       {:cells cells
+        :dimension [rows cols]}))))
 
 (defn ->srm-table [units qtrs & {:keys [w h cached?] :or {w 60 h 20 cached? true}}]
   (->table units qtrs w h cached?))
@@ -48,6 +49,9 @@
                 xs))
              t
              (cells t)))
+(defn dimension [t] (:dimension (node-meta t)))
+(defn row-count [t] (first (dimension t)))
+(defn col-count [t] (second (dimension t)))
 
 (defn rows [t]
   (let [rws (cells t)]
@@ -62,10 +66,9 @@
   (let [rows (cells t)
         rs   (range (count rows))
         cls  (count (first (vals rows)))]
-    (for [c cls]
-      (apply concat 
-             (for [r  rs]
-               (get (get rows r) c))))))
+    (for [c (range cls)]
+      (for [r  rs]
+        (get (get rows r) c)))))
 
 (defn col [t idx]
   (let [rs (cells t)] 
@@ -78,3 +81,9 @@
 (defn do-col [t idx f]
    (f (col t idx)))
         
+
+(comment ;;testing
+  (defn random-col-color! [t]
+    (do-col t (rand-int (col-count t))
+            #(doseq [c %] (set-paint! c (rand-nth [:red :yellow :green :blue])))))
+  )

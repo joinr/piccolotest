@@ -13,7 +13,8 @@
                           PInputEvent PInputEventFilter]
    [org.piccolo2d.nodes   PPath PImage PText PShape]
    [org.piccolo2d.util   PBounds
-                         PAffineTransform]
+                         PAffineTransform
+                         PPaintContext]
    [org.piccolo2d.extras.event
     PSelectionEventHandler
     PNotification
@@ -370,12 +371,13 @@
   root of nd, stored in the node properties under
   :default-timeline"
   ([nd clock nm]
-   (let [rt (node-root nd)]
+   (if-let [rt (node-root nd)]
      (if-let [tl (get (node-meta rt) nm)]
        tl
        (let [tl (acts/->timeline rt clock)
              _  (vary-node-meta rt assoc nm tl)]
-         tl))))
+         tl))
+     (throw (Exception. (str [:node nd :is-unrooted])))))
   ([nd clock] (derive-timeline nd  clock :default-timeline))
   ([nd] (derive-timeline nd (atom 0) :default-timeline)))
 
@@ -453,7 +455,7 @@
           ]
       (do (render! rects)
           (doseq [r rects]
-            (animate-to-position-scale-rotation r (rand-int 1000) (rand-int 1000) 1.0 (/ Math/PI 2.0) dur))
+            (animate-to-position-scale-rotation r (rand-int 1000) (rand-int 1000) 1.0 (* Math/PI 2.0) dur))
           (let [clock (:clock @(derive-timeline (first rects)))]
             (dotimes [i (/ dur 20.0)]
               (swap! clock (fn [x] (unchecked-add x 20)))
@@ -1396,13 +1398,31 @@
   (instance? org.piccolo2d.extras.pswing.PSwing nd))
 (defn has-swing? [x]
   (some swing?  (node-seq (as-node x))))
-                 
+
+(def rq {:high PPaintContext/HIGH_QUALITY_RENDERING
+         :low  PPaintContext/LOW_QUALITY_RENDERING})
+
+(defn set-rendering-quality! [^PCanvas cnv type q]
+  (do (case type
+        :default (.setDefaultRenderQuality cnv (int (rq q)))
+        :animating (.setAnimatingRenderQuality cnv (int (rq q)))
+        :interacting (.setInteractingRenderQuality cnv (int (rq q)))
+        (throw (str (Exception. [:unknown-type type]))))
+      cnv))
+
+(defn apply-render-options! [cnv opts]
+  (reduce-kv (fn [acc t q]
+               (set-rendering-quality! acc t q))
+             cnv opts))
+
 ;;animate entities...
-(defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu]}]
+(defn render!
+  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu render-options]}]
   (let  [^PCanvas cnv   (doto (if (or swing? (has-swing? nd))
                                 (->swing-canvas)
                                 (->canvas))
                           (.setPreferredSize (java.awt.Dimension. 600 600)))
+           _     (when render-options (apply-render-options! cnv render-options))
            _     (when clear-pan?  (.removeInputEventListener cnv (.getPanEventHandler cnv)))
            _     (when clear-zoom? (.removeInputEventListener cnv (.getZoomEventHandler cnv)))
            ^PLayer layer (.getLayer cnv)

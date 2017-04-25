@@ -1,5 +1,6 @@
 (ns piccolotest.examples
-  (:require [piccolotest.sample :as picc :refer :all]
+  (:require [piccolotest [sample :as picc :refer :all]
+                         [table :as tbl]]
             [spork.cljgui.components.swing :as gui]
             [piccolotest [events :as events]
                          [properties :as props]
@@ -48,3 +49,34 @@
        ])
   )
 
+;;Activities example.
+;;==================
+(defn simple-test [& {:keys [dur] :or {dur 2000}}]
+  (let [fr    (->filled-rect :red 0 0 100 100)
+        cnv   (render! fr)
+        tl    (derive-timeline fr)
+        clock (:clock @tl)
+        ;;creates something akin to a promise...a pending activity that
+        ;;runs until time in clock = 20000
+        _     (animate-to-position-scale-rotation fr 100 1000 1.0 0 dur tl)]
+    (dotimes [i (/ dur 20.0)]
+      (swap! clock (fn [x] (unchecked-add x 20)))
+      (Thread/sleep 20))))
+    
+;;more complicated
+(defn big-test [& {:keys [cached? n dur] :or {n 1000 dur 30000}}]
+  (let [rects (for [i (range n)]
+                (->filled-rect (java.awt.Color. (int (rand-int 255)) (int (rand-int 255)) (int (rand-int 255)))
+                               (rand-int 1000)
+                               (rand-int 1000)
+                               20 20))
+        rect-node (if cached? (->cache rects) rects)]
+    (do (render! rect-node :render-options {:default :low
+                                            :interacting :low
+                                            :animating :low})
+        (doseq [r rects]
+          (animate-to-position-scale-rotation r (rand-int 1000) (rand-int 1000) 1.0 (/ Math/PI 2.0) dur))
+        (let [clock (:clock @(derive-timeline (first rects)))]
+          (dotimes [i (/ dur 20.0)]
+            (swap! clock (fn [x] (unchecked-add x 20)))
+            (Thread/sleep 20))))))
