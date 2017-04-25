@@ -80,3 +80,22 @@
           (dotimes [i (/ dur 20.0)]
             (swap! clock (fn [x] (unchecked-add x 20)))
             (Thread/sleep 20))))))
+
+
+;;Messing with tables.
+;;====================
+(defn random-col-color! [t]
+  (tbl/do-col t (rand-int (tbl/col-count t))
+          #(doseq [c %] (set-paint! c (rand-nth [:red :yellow :green :blue])))))
+
+(defn rainbow-table [& {:keys [r c] :or {r 20 c 20}}]
+  (let [t (tbl/->table r c 200 200 nil)]
+    (render! t)
+    (dotimes [i 100000]
+      (do-scene (random-col-color! t))
+      (Thread/sleep 16))
+    ))
+
+;;Investigate - lazy nested rainbow tables...
+    
+
