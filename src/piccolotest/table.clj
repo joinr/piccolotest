@@ -4,12 +4,24 @@
 (ns piccolotest.table
   (:require [piccolotest.sample :refer :all])
   (:import  [org.piccolo2d PNode PLayer]
-            [org.piccolo2d.nodes PPath]))
+            [org.piccolo2d.nodes PPath]
+            [org.piccolo2d.util PBounds]))
 
 (defn ^PNode ->cell [row col w h]
-  (doto ^PPath (->rect :white (* col w)
-                       (* row h) w h {:row row :col col})
+  (doto ^PPath (->rect :white (* col w) (* row h) 
+                       w h {:row row :col col})
         (.setStroke nil)))
+
+;;this is a hack...
+(defn add-cell-child [^PNode cl chld]
+  (let [^PBounds bnds (get-bounds cl)
+        x    (.getX bnds)
+        y    (.getY bnds)
+        h    (.getHeight bnds)]
+    (do (add-child (node-parent cl) chld)
+        (translate chld x (- y h h) #_(- h y))
+        cl)))
+        
 
 ;;It'd be nice to have a value set in the table, as well as a mapping of
 ;;value->color.  We can have multiple layers too, allowing for imagery.
