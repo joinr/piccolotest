@@ -23,14 +23,14 @@
                            (for [row (range rows)
                                  col (range cols)]
                              [[row col] (->cell row col w h)]))
-         cells         (reduce (fn [acc [[row coll] c]]
-                                 (let [rw (get acc row {})
-                                       cols (assoc rw coll c)]
-                                   (assoc acc row cols))) {} cell-data)
-         ctor (if cached? ->cache identity)]        
+         cells       (reduce (fn [acc [[row coll] c]]
+                               (let [rw   (get acc row {})
+                                     cols (assoc rw coll c)]
+                                 (assoc acc row cols))) {} cell-data)
+         ctor        (if cached? ->cache identity)]        
                                         ; background (->rect :white 0 0 (* w cols) (* h rows) {:cells cells})]
      (with-node-meta
-       (ctor (->layer  (map second  cell-data)))
+       (ctor (->layer (map second cell-data)))
        {:cells cells}))))
 
 (defn ->srm-table [units qtrs & {:keys [w h cached?] :or {w 60 h 20 cached? true}}]
@@ -48,3 +48,33 @@
                 xs))
              t
              (cells t)))
+
+(defn rows [t]
+  (let [rws (cells t)]
+    (for [r (range (count rows))]
+      (vals (get rws r)))))
+
+(defn row [t idx]
+  (let [rws (cells t)]
+    (vals (get rws idx))))
+
+(defn cols [t]
+  (let [rows (cells t)
+        rs   (range (count rows))
+        cls  (count (first (vals rows)))]
+    (for [c cls]
+      (apply concat 
+             (for [r  rs]
+               (get (get rows r) c))))))
+
+(defn col [t idx]
+  (let [rs (cells t)] 
+    (for [r  (range (count rs))]
+      (get (get rs r) idx))))
+
+(defn do-row [t idx f]
+  (f (row t idx)))
+
+(defn do-col [t idx f]
+   (f (col t idx)))
+        

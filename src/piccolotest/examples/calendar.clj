@@ -176,9 +176,9 @@
 (defn month->indexed-days [year month]
   (let [first-day     (date/simple-date year month 1)
         last-day      (date/simple-date year (inc month) 0)
-        days-in-month (- (.getDate last-day)
-                         (.getDate first-day))
-        init-day      (.getDay first-day)];;0-6=>S-Sa
+        days-in-month (- (.getDate ^java.util.Date last-day)
+                         (.getDate ^java.util.Date first-day))
+        init-day      (.getDay ^java.util.Date first-day)];;0-6=>S-Sa
     (->> (day-stream init-day)
          (map #(assoc % :year year :month month))
          (take days-in-month))))
@@ -195,8 +195,8 @@
         bounds        [0 0 month-width 570]
         first-day     (date/simple-date year month 1)
         last-day      (date/simple-date year (inc month) 0)
-        days-in-month (- (.getDate last-day)
-                         (.getDate first-day))
+        days-in-month (- (.getDate ^java.util.Date last-day)
+                         (.getDate ^java.util.Date first-day))
         month-node    (-> (->> (->text (get month-names (dec month)))
                                (->cartesian)
                                (->scale     2 2)
@@ -279,18 +279,21 @@
                            _            (reset! last-focus new-focus)
                            global-xform (global-transform new-focus)
                            inv          (inverse global-xform)
-                           cam-bounds   (get-bounds cam)
+                           cam-bounds   (get-full-bounds cam)
                            focus-bounds (get-full-bounds new-focus)
-                           _ (.translate inv (/ (- (.width cam-bounds)  (.width focus-bounds)) 2.0)
-                                             (/ (- (.height cam-bounds) (.height focus-bounds)) 2.0))
+                           _ (.translate inv
+                                         (/ (- (.width  cam-bounds)  (.width focus-bounds))  2.0)
+                                         (/ (- (.height cam-bounds)  (.height focus-bounds)) 2.0))
                            _ (println [:zooming-to (reset! last-sample
                                                            {:global global-xform :inv inv :cam cam-bounds :focus focus-bounds})])]
                        (if (identical? new-focus base-layer)
                          (center-on! cam new-focus zoomtime)
-                         (animate-view-to-transform! cam global-xform #_inv zoomtime))))
+                         (animate-view-to-transform! cam global-xform #_inv zoomtime)
+                         
+                         )))
                       
         zoom-out  (fn zoom-out [cam]
-                    (let [new-foc (or (find-up (.getParent @last-focus) (property-filter :type #{:month}))
+                    (let [new-foc (or (find-up (node-parent @last-focus) (property-filter :type #{:month}))
                                       base-layer)
                           _ (println [:zooming-out (if (identical? new-foc base-layer) :base (node-meta new-foc))])
                           _ (reset! focus new-foc)]
@@ -342,26 +345,19 @@
 (defn zoom-hierarchically [base-layer duration]
   (let [zoomtime  (long duration)
         zoomer    (->zoomer base-layer #_(property-filter :type #{:day :month}) duration)
-       {:keys [zoom-to zoom-out last-focus focus]} zoomer]
+        {:keys [zoom-to zoom-out last-focus focus]} zoomer]
     {:mouseClicked
      (fn [e]
        (cond (events/left-click? e)
              (let [nd (events/picked-node e)
                    _  (println [:left-click nd (node-meta nd)])
-                   new-focus ;(if (or (nil? @last-focus)
-                              ;       (instance?  org.piccolo2d.PLayer @last-focus))
-                               ;(do (println [:looking-month])
-                                ;   (find-up nd  (property-filter :type #{:month})))
-                   (or (find-up nd (property-filter :type #{:day :month}))
-                       base-layer)
-                                        ;)
+                   new-focus  (or (find-up nd (property-filter :type #{:day :month}))
+                                  base-layer)
                    _ (println [:found new-focus (node-meta new-focus)])]
                  (when-not (identical? @last-focus new-focus)
                    (zoom-to (events/camera e) new-focus)))
                (events/right-click? e)  (zoom-out (events/camera e))
                :else true))}))
-
-
 
 ;;Note: they already have this implemented in piccolo extras..
 ;;we can probably just wrap that.  For now, all I want to do
@@ -371,11 +367,15 @@
 ;;views of the entity, perhaps using swing trees and the like.
 (defn selector   [select deselect]
   {:mouseClicked nil
-   :mouseExited  nil}
-  )
+   :mouseExited  nil})
 
 
 (defn render-cal []
-  (let [months (->spaced-shelf 90 (->month 2017 1) (->month 2017 2))
+  (let [months  (apply ->spaced-stack 180
+                       (for [months (partition 4 (map inc (range 12)))]
+                         (let [ms (mapv (fn [m] (->month 2017 m)) months)]
+                           (-> (apply ->spaced-shelf 90 ms)
+                               (add-child (->cartesian (->text "ShelfL")))
+                               #_(highlight-bounds! :blue)))))
         zooming (zoom-hierarchically months 500)]
-    (picc/render! months :handler zooming)))
+    (picc/render! months :handler (merge zooming (highlighter :blue)))))

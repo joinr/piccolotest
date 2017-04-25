@@ -180,7 +180,7 @@
   (as-node   [nd]        (.getRoot ^POffscreenCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer ^PCamera (.getCamera nd) 0) (as-node chld)) nd))  
   org.piccolo2d.extras.pswing.PSwingCanvas
-  (as-node [nd]        (.getRootNode ^PSwingCanvas nd))
+  (as-node [nd]        (.getRoot ^PSwingCanvas nd))
   (add-child [nd chld] (do (.addChild (.getLayer ^PSwingCanvas nd) (as-node chld)) nd))
   clojure.lang.PersistentVector
   (as-node [nd]        (reduce add-child (PNode.)  nd))
@@ -202,7 +202,7 @@
   (pos? (.getChildrenCount ^PNode (as-node nd))))
 
 (defn node-children [nd]
-  (iterator-seq (.getChildrenIterator (as-node ^PNode nd))))
+  (iterator-seq (.getChildrenIterator ^PNode (as-node ^PNode nd))))
 
 ;;Search through the node meta data for ids
 (defn find-node [id ^PNode root]
@@ -264,7 +264,7 @@
 (defn ^PBounds get-full-bounds [^PNode o] (.getFullBounds o)) 
 
 (defn ^PNode set-bounds! [nd bnds]
-  (doto nd (.setBounds (as-bounds bnds))))
+  (doto ^PNode (as-node nd) (.setBounds ^PBounds (as-bounds bnds))))
 
 (defn ^PNode invalidate! [^PNode nd]
   (doto nd
@@ -310,7 +310,7 @@
 ;;root easily.  The layer doesn't change.  Just
 ;;transplant the root's children.  Should work fine.
 (defn swap-root [canvas new-root]
-  (let [cam      (.getCamera canvas)
+  (let [^PCamera cam      (.getCamera ^PCanvas canvas)
         nodes    (node-children (.getRoot cam))
         new-root (add-children new-root nodes)]
     canvas))
@@ -687,7 +687,7 @@
   ([color x y width height start extent] (->arc color x y width height start extent {})))
 
 (defn clear-background! [^PNode nd]
-  (.setPaint (java.awt.Color. 1 0 0 100)))
+  (.setPaint nd (java.awt.Color. 1 0 0 100)))
 
 
 (defn ^PNode ->quadCurve
@@ -753,7 +753,7 @@
 ;;a 10x10 grid
 (defn ->grid-lines
   [^org.piccolo2d.PNode nd]
-   (let [bounds (.getFullBounds nd)
+   (let [bounds (get-full-bounds nd)
          height (.getHeight bounds)
          width  (.getWidth bounds)
          x      (.getX bounds)
@@ -771,7 +771,8 @@
 ;;Should this be an image?  Should we just alter the node's
 ;;color property?
 (defn ->background [clr nd]
-  (let [bounds (.getFullBounds nd)
+  (let [^PNode nd (as-node nd)
+        ^PBounds bounds (get-full-bounds nd)
         height (.getHeight bounds)
         width  (.getWidth bounds)
         x      (.getX bounds)
@@ -816,7 +817,12 @@
                                (pop_shape  []     this)
                                (wipe       [] (canvas/wipe ss) this))]
            my-image)))
-       
+
+(defn offset? [nd]
+  (if-let [m (node-meta nd)]
+    (not (:offset-immune m))
+    true))
+
 ;;rewrite using our node transforms.
 (defn ^PNode ->shelf
   [& nodes]
@@ -824,11 +830,12 @@
         (proxy [org.piccolo2d.PNode] []
           (layoutChildren [] 
             (reduce (fn [^double xoffset ^PNode nd]
-                      (let [w (.getWidth (.getFullBoundsReference nd))]              
+                      (let [w (.getWidth ^PBounds (.getFullBoundsReference nd))]              
                         (.setOffset nd (- xoffset (.getX nd)) 0.0)
                         (+ xoffset w)))
                     0.0
-                    (iterator-seq (.getChildrenIterator this)))
+                    (filter offset?
+                            (iterator-seq (.getChildrenIterator ^PNode this))))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
       (add-child nd (as-node n)))
@@ -868,7 +875,7 @@
                         (.setOffset nd (- xoffset (.getX nd)) 0.0)
                         (+ xoffset w spacing)))
                     0.0
-                    (iterator-seq (.getChildrenIterator this)))
+                    (filter offset? (iterator-seq (.getChildrenIterator this))))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
       (add-child nd (as-node n)))
@@ -909,7 +916,8 @@
                         (.setOffset nd 0.0 (+ yoffset h))
                         (+ yoffset h)))
                     0.0
-                    (iterator-seq (.getChildrenIterator this)))
+                    (filter offset?
+                            (iterator-seq (.getChildrenIterator this))))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
       (add-child nd (as-node n)))
@@ -928,7 +936,7 @@
                         (.setOffset nd 0.0 (+ yoffset h))
                         (+ yoffset spacing h)))
                     0.0
-                    (iterator-seq (.getChildrenIterator this)))
+                   (filter offset?  (iterator-seq (.getChildrenIterator this))))
             (proxy-super layoutChildren)))]
     (doseq [n nodes]
       (add-child nd (as-node n)))
@@ -972,7 +980,7 @@
 ;;I think this may be killing us.....
 ;;Supports animated, time-varying fade via the atom.
 (defn ^PNode ->fade [alpha child]
-  (let [alpha  (if (atom? alpha) alpha  (float alpha))
+  (let [alpha   (if (atom? alpha) alpha (float alpha))
         push-tp (if (atom? alpha)
                   (fn [^org.piccolo2d.util.PPaintContext ppaint]                    
                     (.pushTransparency ppaint (float @alpha)))
@@ -1056,8 +1064,8 @@
 
 (defn ->lod-box
   ([thresh icon node]
-   (let [contents  (as-node node)
-         bbox      (.getFullBounds contents)
+   (let [^PNode contents  (as-node node)
+         ^PBounds bbox    (get-full-bounds contents)
          block     (cond  (keyword? icon)
                           (->filled-rect icon (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))
                           (fn? icon)
@@ -1251,7 +1259,7 @@
 ;;follows along a path.
 (defn follow-path!
   ([^PNode nd pts speed f]
-   (let [bounds      (.getFullBounds nd)
+   (let [^PBounds bounds      (get-full-bounds nd)
          x           (.getX      bounds)
          y           (.getY      bounds)
          next-point (follow-path x y speed pts)]
@@ -1289,7 +1297,7 @@
       (add-child origin child))))
   ([^PNode child]
    (let [child (as-node child)]
-     (->cartesian (.getHeight (.getFullBounds child)) child))))
+     (->cartesian (.getHeight ^PBounds (get-full-bounds child)) child))))
           
 ;;general transform node.
 (defn ^PNode ->transform [^java.awt.geom.AffineTransform xform child]
@@ -1333,9 +1341,9 @@
   ([^PLayer lyr]  (.getGlobalFullBounds lyr)))
 
 (defn center!
-  [cnv]
-  (doto (.. cnv getCamera)
-    (.animateViewToCenterBounds  (layer-bounds (.getLayer cnv)) true 0)))
+  [^PCanvas cnv]
+  (doto ^PCamera (.. cnv getCamera)
+    (.animateViewToCenterBounds  ^PBounds (layer-bounds (.getLayer cnv)) true 0)))
 
 (defn with-input! [nd p]
   (do (.addInputEventListener  ^PNode (as-node nd)
@@ -1343,10 +1351,10 @@
         nd))
 
 (defn center-offscreen!
-  ([cnv ^PBounds bnds]
-   (doto (.. cnv getCamera)
+  ([^POffscreenCanvas cnv ^PBounds bnds]
+   (doto ^PCamera (.. cnv getCamera)
      (.animateViewToCenterBounds  bnds true 0)))
-  ([cnv] (center-offscreen! cnv (layer-bounds (.getLayer (.getCamera cnv) 0)))))
+  ([^POffscreenCanvas cnv] (center-offscreen! cnv (layer-bounds (.getLayer ^PCamera (.getCamera cnv) 0)))))
 
 
 (defn offscreen! [nd & {:keys [transform background width height]
@@ -1391,13 +1399,13 @@
                  
 ;;animate entities...
 (defn render!  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu]}]
-  (let  [cnv   (doto (if (or swing? (has-swing? nd))
-                       (->swing-canvas)
-                       (->canvas))
-                   (.setPreferredSize (java.awt.Dimension. 600 600)))
+  (let  [^PCanvas cnv   (doto (if (or swing? (has-swing? nd))
+                                (->swing-canvas)
+                                (->canvas))
+                          (.setPreferredSize (java.awt.Dimension. 600 600)))
            _     (when clear-pan?  (.removeInputEventListener cnv (.getPanEventHandler cnv)))
            _     (when clear-zoom? (.removeInputEventListener cnv (.getZoomEventHandler cnv)))
-           layer (.getLayer cnv)
+           ^PLayer layer (.getLayer cnv)
            _     (when transform  (.setTransform layer transform))
            _     (when background (if (or (node? background)
                                           (satisfies? IPiccNode background))
@@ -1486,7 +1494,8 @@
 ;;Problem is, if we add the child, we get the parent transforms
 ;;applied...
 (defn highlight-bounds! [nd color]
-  (let [hbounds (->bounds-rect color nd)]
+  (let [hbounds (with-node-meta (->bounds-rect color nd)
+                  {:offset-immune true})]
       (-> nd
           (vary-node-meta 
            assoc :highlighted hbounds)
@@ -1515,15 +1524,14 @@
       nd))
 
 (defn highlighter [highlight-color]
-  {:mouseEntered (fn [^PInputEvent e]
-                   (highlight! (.getPickedNode e) highlight-color))                         
-   :mouseExited  (fn [^PInputEvent e]
-                   (un-highlight!  (.getPickedNode e)))})
+  {:mouseEntered (fn [e]
+                   (highlight! (events/picked-node e) highlight-color))                         
+   :mouseExited  (fn [e]
+                   (un-highlight!  (events/picked-node e)))})
 
 (defn annotater [node->annotation]
   {:mouseEntered (fn [e] (node->annotation (events/picked-node e)))
-   :mouseExited  (fn [^PInputEvent e]
-                   (node->annotation  (.getPickedNode e)))})
+   :mouseExited  (fn [e] (node->annotation (events/picked-node e)))})
 
 ;;We'd like to have an entity properties frame setup...
 ;;Should we have a jtree or just embed the piccolo canvas inside
@@ -1636,6 +1644,8 @@
 
 (defn ^PAffineTransform global-transform [nd] (global->local-transform nd))
 (defn ^PAffineTransform local-transform [nd] (local->global-transform nd))
+
+
 
 ;;can we visualize a marathon project?
 
