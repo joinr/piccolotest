@@ -316,7 +316,7 @@
 
 ;;Note: since we have multiple layers, we can have internal cameras...
 (defrecord mapboard [tokens places top-layer map-layer arc-layer token-layer arcs? coords-fn]
-  piccolotest.sample.IPiccNode
+  picc/IPiccNode
   (as-node   [nd]         top-layer)
   (add-child [nd child]   (do (picc/add-child top-layer child) nd))  
   IMapBoard

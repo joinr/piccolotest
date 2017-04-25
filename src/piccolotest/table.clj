@@ -36,6 +36,7 @@
 
 (defn ->srm-table [units qtrs & {:keys [w h cached?] :or {w 60 h 20 cached? true}}]
   (->table units qtrs w h cached?))
+
 (defn cells [t] (:cells (node-meta t)))
 (defn get-cell [t row col] (get (get (cells t) row) col))
 (defn clear-cells! [t]

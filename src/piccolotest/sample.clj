@@ -1404,8 +1404,8 @@
 
 (defn set-rendering-quality! [^PCanvas cnv type q]
   (do (case type
-        :default (.setDefaultRenderQuality cnv (int (rq q)))
-        :animating (.setAnimatingRenderQuality cnv (int (rq q)))
+        :default     (.setDefaultRenderQuality     cnv (int (rq q)))
+        :animating   (.setAnimatingRenderQuality   cnv (int (rq q)))
         :interacting (.setInteractingRenderQuality cnv (int (rq q)))
         (throw (str (Exception. [:unknown-type type]))))
       cnv))
@@ -1417,11 +1417,13 @@
 
 ;;animate entities...
 (defn render!
-  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu render-options]}]
-  (let  [^PCanvas cnv   (doto (if (or swing? (has-swing? nd))
+  [nd & {:keys [transform background handler clear-pan? clear-zoom? swing? menu render-options
+                width height]
+         :or {width 600 height 600}}]
+  (let  [ ^PCanvas cnv   (doto (if (or swing? (has-swing? nd))
                                 (->swing-canvas)
                                 (->canvas))
-                          (.setPreferredSize (java.awt.Dimension. 600 600)))
+                          (.setPreferredSize (java.awt.Dimension. width height)))
            _     (when render-options (apply-render-options! cnv render-options))
            _     (when clear-pan?  (.removeInputEventListener cnv (.getPanEventHandler cnv)))
            _     (when clear-zoom? (.removeInputEventListener cnv (.getZoomEventHandler cnv)))
@@ -1438,9 +1440,10 @@
       (center! cnv)
       cnv))
 
-(defn render-raw!  [nd & {:keys [transform background handler]}]
+(defn render-raw!  [nd & {:keys [transform background handler        width height]
+                          :or {width 600 height 600}}]
     (let  [cnv (doto (->canvas)
-                     (.setPreferredSize (java.awt.Dimension. 600 600)))
+                     (.setPreferredSize (java.awt.Dimension. width height)))
            layer (.getLayer cnv)
            _     (when transform (.setTransform layer transform))
            _     (when background (if (or (node? background)
