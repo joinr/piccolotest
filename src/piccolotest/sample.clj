@@ -801,7 +801,11 @@
                       (uncartesian!)))
   ([source] (->image source {})))
 
-
+;;We need a sprite.  Given a node, render it to a buffered image,
+;;returning a pimage node.  Can we just append to a node cache?
+(defn ^PNode ->sprite
+  ([source]
+   (->image (.getImageCache (->cache source)))))
 
 ;;given a shapestack...
 ;;we can get a sketching surface that's compatible as both a
