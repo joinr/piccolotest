@@ -1196,82 +1196,91 @@
   ;;translate a node, over time, going from point-to-point.
   (let [pos       (atom [x y]) ;arrays are mutable and fast.
         points    (drop-while (fn [p]
-                                (let [[dx dx] (dist @pos p)]
-                                   (and (zero? dx) (zero? dx))))
-                          points)
-        vel       (atom (let [[vx vy] (direction [x y] (first points))]
-                          [(* vx speed)
-                           (* vy speed)]))
-        remaining (atom points)
-        ]
-    ;;this is really just a parametric curve.
-    ;;we're walking as far as possible each time step.
-    ;;governed by the constraints of the linear segments.
-    ;;and speed/time.  Velocity and position are a consequence
-    ;;of the walk.  deltas in position turn into node translations.
-    (fn walk! [t]
-      (when-let [pts (seq @remaining)]          
-        (loop [available (* speed t)
-               current   @pos
-               pts      pts]          
-            (cond (empty? pts)
-                        (let [res (dist @pos current)
-                              _    (reset! pos current)
-                              _ (reset! remaining nil)]
-                          ;(with-meta
+                                (let [[dx dy] (dist @pos p)]
+                                   (and (zero? dx) (zero? dy))))
+                              points)]
+    (if (seq points)
+      (let [dirxy     (direction [x y] (first points))
+            vel       (atom (let [[vx vy] dirxy]
+                              [(* vx speed)
+                               (* vy speed)]))
+            remaining (atom points)
+            ]
+        ;;this is really just a parametric curve.
+        ;;we're walking as far as possible each time step.
+        ;;governed by the constraints of the linear segments.
+        ;;and speed/time.  Velocity and position are a consequence
+        ;;of the walk.  deltas in position turn into node translations.
+        (fn walk! [t]
+          (when-let [pts (seq @remaining)]          
+            (loop [available (* speed t)
+                   current   @pos
+                   pts      pts]          
+              (cond (empty? pts)
+                    (let [res (dist @pos current)
+                          _    (reset! pos current)
+                          _ (reset! remaining nil)]
+                                        ;(with-meta
                                         ;res
-                          current
-                          ;  {:point current}
-                            ;)
-                          )  ;last point, possible small step.
-                  :else 
-                  ;;we can keep walking       
-                  (let [
-                        target    (first pts)
-                        [dx dy]   (dist current target)
-                        required  (norm dx  dy)                  
-                        covered   (-  available required)
-                       ; _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
-                                   ]           
-                    (if (pos? covered) ;we have excess travel capacity...
-                      (do ;(println :passing-through target)
+                      current
+                                        ;  {:point current}
+                                        ;)
+                      )  ;last point, possible small step.
+                    :else 
+                    ;;we can keep walking       
+                    (let [
+                          target    (first pts)
+                          [dx dy]   (dist current target)
+                          required  (norm dx  dy)                  
+                          covered   (-  available required)
+                                        ; _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
+                          ]           
+                      (if (pos? covered) ;we have excess travel capacity...
+                        (do ;(println :passing-through target)
                           (recur covered
                                  target
                                  (rest pts)))
-                  ;;we need to update our position
-                  ;;we're in-transit how far along the segment?              
-                  (let [;;scale that by unit velocity vector.
-                        [vx vy] (direction current target) ;direction vector
-                        dx    (* vx available) ;;displacement
-                        dy    (* vy available)
-                        destx (+ dx (first current)) ;actual end point.
-                        desty (+ dy (second current))
-                        ;;our displacement from original position
-                       ; offx (- destx (nth @pos 0)) 
-                       ; offy (- desty (nth @pos 1))
-                       ; _ (println [:updating @pos :velocity [dx dy] :through current :to target ])
-                        _    (reset! pos [destx
-                                          desty])
-                        _    (reset! remaining pts)]
-                   ; (with-meta
+                        ;;we need to update our position
+                        ;;we're in-transit how far along the segment?              
+                        (let [;;scale that by unit velocity vector.
+                              [vx vy] (direction current target) ;direction vector
+                              dx    (* vx available) ;;displacement
+                              dy    (* vy available)
+                              destx (+ dx (first current)) ;actual end point.
+                              desty (+ dy (second current))
+                              ;;our displacement from original position
+                                        ; offx (- destx (nth @pos 0)) 
+                                        ; offy (- desty (nth @pos 1))
+                                        ; _ (println [:updating @pos :velocity [dx dy] :through current :to target ])
+                              _    (reset! pos [destx
+                                                desty])
+                              _    (reset! remaining pts)]
+                                        ; (with-meta
                                         ;[offx offy]
-                    [destx desty]
-                      ;{:point @pos}
-                    ;  )
-                    ;;total displacement from current
-                    ;{:position pos :velocity vel :remaining remaining}
-                    )))))))))
+                          [destx desty]
+                                        ;{:point @pos}
+                                        ;  )
+                          ;;total displacement from current
+                                        ;{:position pos :velocity vel :remaining remaining}
+                          ))))))))
+        ;;no points...
+        (fn [t] nil))))
 
 ;;follows along a path.
 (defn follow-path!
-  ([^PNode nd pts speed f]
+  "Defines a parametric tansform on the node, given points to follow, speed to 
+   traverse, a step function f :: nd x y -> nil, and an optional on-finish 
+   function called when there are no more points to traverse, on-finish :: 
+   nd -> nil "
+  ([^PNode nd pts speed f & {:keys  [on-finish]}]
    (let [^PBounds bounds      (get-full-bounds nd)
          x           (.getX      bounds)
          y           (.getY      bounds)
          next-point (follow-path x y speed pts)]
      (fn [t]
-       (when-let [^clojure.lang.PersistentVector res (next-point t)]        
-         (f nd (double (.nth res 0)) (double (.nth res 1)))))))
+       (if-let [^clojure.lang.PersistentVector res (next-point t)]        
+         (f nd (double (.nth res 0)) (double (.nth res 1)))
+         (when on-finish (on-finish nd))))))
   ([nd pts speed] (follow-path! nd pts speed translate!)))
 
 (comment ;testing

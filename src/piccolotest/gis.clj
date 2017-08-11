@@ -222,11 +222,13 @@
         speed    (if duration  (/  dist duration) speed)
         duration (or duration (/ dist speed)) ;;we could make duration an atom and let timer watch.
         end-time (+ duration t)
-        step         (picc/follow-path!  from
-                                         the-path
-                                         speed
-                                         shift-to!) 
         res      (async/chan (async/dropping-buffer 1)) ;ensure we don't have a problem.
+        step     (picc/follow-path!  from
+                                     the-path
+                                     speed
+                                     shift-to!
+                                     :on-finish (fn [_] (do (async/put!   res from)
+                                                            (async/close! res)))) 
         ;;maybe use channels here instead.
         send-nm (gensym "send")
         _       (t/add-timer time-atom (inc duration) send-nm
@@ -236,17 +238,10 @@
                                    (do 
                                      (async/put! res t)
                                      (async/close! res))
-                                   (if-let [nxt (picc/do-scene (step  1))]
-                                     nil
-                                     (do 
-                                       (async/put! res t)
-                                       (async/close! res)))))
+                                    (picc/do-scene (step  1))))
                                (fn [t]
-                                 (if-let [nxt (picc/do-scene (step  1))]
-                                   nil
-                                   (do 
-                                     (async/put! res t)
-                                     (async/close! res))))))                             
+                                 (picc/do-scene (step  1)))))
+                                                              
         _  (when arc?
              (picc/do-scene
               (fading-arc time-atom (.getParent  from)
