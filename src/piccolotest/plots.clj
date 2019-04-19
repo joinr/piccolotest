@@ -5,7 +5,7 @@
   (:require [piccolotest.sample :as p]
             [spork.geometry.shapes :refer :all]
             [spork.graphics2d [debug :as debug] [image :as image]]
-            [spork [sketch :as sketch] [trends :as trends] ]
+            [spork [sketch :as sketch] [trends :as trends]]
             [spork.util.general]
             [piccolotest [canvas :as canvas] [gis :as gis]]))
 
@@ -101,27 +101,27 @@
         yscale      (or yscale (/  (- ymax ymin) height))
         tplot       (sketch/->xy-trend-plot :height height
                                             :width  width)]
-  {:xscale  xscale
-   :yscale  yscale
-   :canvas  tplot
-   :plot  (sketch/->plot tplot
-             :cached false
-             :title  title
-             :xlabel xlabel
-             :ylabel ylabel
-             :title-font  (spork.graphics2d.font/->font "ARIAL" [:bold] 20)
-             :ylabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
-             :xlabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
-             :xmin xmin 
-             :xmax xmax
-             :ymin ymin
-             :ymax ymax
-             :plotxscale 1.0
-             :plotyscale 1.0
-             :h height
-             :w width
-             )
-   :get-color get-color}))
+   {:xscale  xscale
+    :yscale  yscale
+    :canvas  tplot
+    :plot  (sketch/->plot tplot
+              :cached false
+              :title  title
+              :xlabel xlabel
+              :ylabel ylabel
+              :title-font  (spork.graphics2d.font/->font "ARIAL" [:bold] 20)
+              :ylabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
+              :xlabel-font (spork.graphics2d.font/->font "ARIAL" [:bold] 22)
+              :xmin xmin 
+              :xmax xmax
+              :ymin ymin
+              :ymax ymax
+              :plotxscale 1.0
+              :plotyscale 1.0
+              :h height
+              :w width)
+             
+    :get-color get-color}))
 
 (defn center [l r]
   (let [bounds (.getFullBounds r)]
@@ -136,17 +136,17 @@
              (let [txt (p/->text (str nm))
                    bounds (.getFullBounds txt)]          
                [(p/->filled-rect clr 0 0 10 (.getHeight bounds))
-                (p/->translate  10 0 txt)
-                ])))
+                (p/->translate  10 0 txt)])))
+                
     (apply p/->shelf
            (for [[nm clr] (partition 2 series)]
              (let [txt    (p/->text (str nm))
                    bounds (.getFullBounds txt)]          
                [(p/->filled-rect clr (/ (.getWidth bounds) 4.0) 0 (/ (.getWidth bounds) 4.0) 10)
-                (p/->translate  0 10 txt)
-                ]
-                )))
-    ))
+                (p/->translate  0 10 txt)])))))
+                
+                
+    
 ;;this is a little hack to get our nodes lines up for the chart.
 ;;Note: we could institute alignment in the stack and shelf functions......
 (defn middle-right [l r]
@@ -157,8 +157,8 @@
         right (+ (.getX bnds) (.getWidth bnds))]    
     (let [bnds  (.getFullBounds r)
           xr    (.getX          bnds)
-          hr    (.getHeight  bnds)
-          ]
+          hr    (.getHeight  bnds)]
+          
       [l
        (p/->translate  (- right xr)
                        (-        mid hr)
@@ -170,8 +170,8 @@
                   (= (:id (p/node-meta nd)) 'with-stroke))]
     (when-let [xs (p/node-children nd)]
       (and (p/image-node? (first xs))
-           (every? stroke? (rest xs))
-           ))))
+           (every? stroke? (rest xs))))))
+           
 
 (defn find-plot-area [root]
   (->> (p/node-seq root)         
@@ -184,8 +184,8 @@
 ;;Width and height define the viewable width and height, not necessarily the
 ;;dataset.  xmax and ymax define that..
 (defn plot-node [plot-type & {:keys [title width height series get-color xmax ymax xlabel ylabel sliced]
-                 :or {width 600 height 600 series [:a  :green
-                                                   :b  :blue]}}]
+                              :or {width 600 height 600 series [:a  :green
+                                                                :b  :blue]}}]
   (let [get-color (if-let [gc get-color] gc  (apply hash-map series))
         sliced    (or sliced (= plot-type :area))
         name      (or title "the plot")        
@@ -214,8 +214,8 @@
         push-slice  (when sliced
                       (fn push-slice [x]
                         (let [nxt  (spork.trends/add-slice @data x)
-                              _    (reset! data nxt)                   
-                              ]
+                              _    (reset! data nxt)]                   
+                              
                           nxt)))
         ;;need to change this to work with piccolo.
         ;; add-sample (if sliced (fn add-sample! [x]
@@ -233,8 +233,8 @@
                        (fn add-sample! [x]
                          (plter x)
                          (p/do-scene 
-                          (.invalidatePaint plotarea))))
-        ]        
+                          (.invalidatePaint plotarea))))]
+                
     (p/with-node-meta cnv      
       (merge (p/node-meta cnv)
              plt
@@ -328,17 +328,17 @@
     (if (map? tk) ;[nd xy] pair
       (let [{:keys [position icon]} tk
             [x y] position
-            uv  (.xy->uv b position)  ;[(* x (/  1.0 xscale))
+            uv  (.xy->uv b position)]  ;[(* x (/  1.0 xscale))
                                         ;(* y (/  1.0 yscale))]
-            ]
+            
         (iconic-plot. (assoc icons id [icon (atom position)])
                       (add-icon plot-node
                                 (assoc tk :position uv))
                       add-sample
                       xscale
-                      yscale
-                      ))))
-  (drop-token [b tk]  )
+                      yscale))))
+                      
+  (drop-token [b tk])
   (add-place  [b k nd])
   (drop-place [b k])
   (place-node [b k target])
@@ -357,19 +357,19 @@
 
 ;;all we need is a way to compute the color from a point.
 #_(defn shift-icon [^iconic-plot brd nm dx dy trail?]
-  (let [[nd x0y0]  (get-in brd [:icons nm])
-        [x0 y0]    @x0y0
-        x (+ x0 dx)
-        y (+ y0 dy)
-        newxy      [x y]
-        [du dv]    (xy->uv brd [dx dy])]
-    (do (when trail?
-          (let [clr  (quilsample.bridge/color->risk
-                      (quilsample.bridge/default-cycle->color (xy->uv brd newxy)))]
-            (add! brd  x y clr)))
-        (p/translate nd du dv)
-        (reset! x0y0 newxy)
-        brd)))
+   (let [[nd x0y0]  (get-in brd [:icons nm])
+         [x0 y0]    @x0y0
+         x (+ x0 dx)
+         y (+ y0 dy)
+         newxy      [x y]
+         [du dv]    (xy->uv brd [dx dy])]
+     (do (when trail?
+           (let [clr  (quilsample.bridge/color->risk
+                       (quilsample.bridge/default-cycle->color (xy->uv brd newxy)))]
+             (add! brd  x y clr)))
+         (p/translate nd du dv)
+         (reset! x0y0 newxy)
+         brd)))
 
 (defn shift-icon [^iconic-plot brd nm dx dy]
   (let [[nd x0y0]  (get-in brd [:icons nm])
@@ -385,8 +385,8 @@
 (defn shift-origin [brd  nm]
   (let [[nd xy] (get-in brd [:icons nm])
                                         ;[x y]   @xy
-        [u v]   (xy->uv brd @xy)
-        ]
+        [u v]   (xy->uv brd @xy)]
+        
     (do (p/translate nd (- u) (- v))
         (reset! xy [0 0])
         brd)))

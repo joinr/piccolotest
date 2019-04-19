@@ -234,8 +234,8 @@
   (.getRoot ^PNode (as-node nd)))
 
 (defn ->cache [child]
-  (let [c (PNodeCache.)
-        ]
+  (let [c (PNodeCache.)]
+        
     (add-child c child)))
 
 (defn ^PNode set-paint! [^PNode nd clr]
@@ -247,8 +247,8 @@
     (.setTextPaint ^java.awt.Color (swing/get-gui-color clr))))
 (defn ^PText set-text! [^PText nd ^String txt]
   (doto nd
-    (.setText txt)
-    ))
+    (.setText txt)))
+    
 
 (defn ^PNode set-font! [^PText nd fnt]
   (doto nd
@@ -257,12 +257,12 @@
 (defn ^PBounds as-bounds [o]
   (cond (instance? org.piccolo2d.util.PBounds o) o
         (vector? o)
-          (let [[x y w h] o]
-            (PBounds. (double x) (double y) (double w) (double h)))
-          :else (throw (Exception. (str [:cannot-make-bounds o])))))
+        (let [[x y w h] o]
+          (PBounds. (double x) (double y) (double w) (double h)))
+        :else (throw (Exception. (str [:cannot-make-bounds o])))))
 
-(defn ^PBounds get-bounds [^PNode o] (.getBounds o)) 
-(defn ^PBounds get-full-bounds [^PNode o] (.getFullBounds o)) 
+(defn ^PBounds get-bounds [^PNode o] (.getBoundsReference o)) 
+(defn ^PBounds get-full-bounds [^PNode o] (.getFullBoundsReference o)) 
 
 (defn ^PNode set-bounds! [nd bnds]
   (doto ^PNode (as-node nd) (.setBounds ^PBounds (as-bounds bnds))))
@@ -283,9 +283,9 @@
 (defn node? [nd]  (instance? org.piccolo2d.PNode nd))
 (defn ->panel [^JPanel pnl]
   (if (node? pnl) pnl
-      (doto (PSwing. pnl)
+      (doto (PSwing. pnl))))
                                         ;(.setUseBufferedPainting true)
-        )))
+        
    
 ;;note: a canvas is a panel...
 (defn ^PSwingCanvas ->swing-canvas
@@ -332,7 +332,7 @@
 ;;we should redefine this relative to cartesian coords.
 (defn ^PNode translate!
   [^PNode nd ^double x ^double y]
-   (doto nd (.translate x y)))
+  (doto nd (.translate x y)))
 
 (defn ^PNode transform!
   [^PNode nd ^AffineTransform xform]
@@ -340,7 +340,7 @@
 
 (defn ^PNode set-visible!
   [^PNode nd vis]
-   (doto nd (.setVisible (boolean vis))))
+  (doto nd (.setVisible (boolean vis))))
 
 ;;Animated Activities
 ;;===================
@@ -437,35 +437,7 @@
    (animate-to-position-scale-rotation
      nd x y scale theta duration (derive-timeline nd))))
 
-(comment ;testing
-
-  (def fr (->filled-rect :red 0 0 100 100))
-  (render! fr)
-  (def tl (derive-timeline fr))
-  (def clock (:clock @tl))
-  (animate-to-position-scale-rotation fr 100 1000 1.0 0 2000)
-
-  ;;more complicated
-  (defn big-test [& {:keys [dur] :or {dur 30000}}]
-    (let [rects (for [i (range 1000)]
-                  (->filled-rect (java.awt.Color. (int (rand-int 255)) (int (rand-int 255)) (int (rand-int 255)))
-                                 (rand-int 1000)
-                                 (rand-int 1000)
-                                 20 20))
-          ]
-      (do (render! rects)
-          (doseq [r rects]
-            (animate-to-position-scale-rotation r (rand-int 1000) (rand-int 1000) 1.0 (* Math/PI 2.0) dur))
-          (let [clock (:clock @(derive-timeline (first rects)))]
-            (dotimes [i (/ dur 20.0)]
-              (swap! clock (fn [x] (unchecked-add x 20)))
-              (Thread/sleep 20))))))
-
-  ;;now we'd like to schedule multiple dependent activities....
-  ;;this is like an activity chain
-
-
-  )
+  
 
 ;;getting the idea for reactive nodes....
 ;;nodes that are a function of time....
@@ -473,7 +445,7 @@
 ;;probably make this something else...
 (defn ^PNode translate
   [^PNode nd ^double x ^double y]
-   (doto nd (.translate x (- y))))
+  (doto nd (.translate x (- y))))
 
 (defn ^PNode translate-to!
   ([^PNode nd ^double x ^double y]
@@ -481,7 +453,7 @@
        nd))
   ([nd ^clojure.lang.PersistentVector xy] (translate-to! nd (.nth xy 0) (.nth xy 1)))) 
 
-(defn ^PNode translate-by! [^PNode nd ^double x ^double y ]
+(defn ^PNode translate-by! [^PNode nd ^double x ^double y]
   (let [trans (doto (AffineTransform.)
                     (.translate (double x) (double (if *cartesian* (- y) y))))]
     (doto nd (.setTransform trans))))
@@ -518,8 +490,6 @@
     (-> nd 
         (translate! 0.0 height) ;altered from 1.0
         (scale! 1.0 -1.0))))
-;(defn ^PNode scale! [^PNode nd ^double x ^double y] (doto nd (.scale x y)))
-
 
 
 ;;It'd be nice to have a visual representation of the scene that we can mess with, explore, etc.
@@ -559,8 +529,8 @@
                        new-scale (.getViewScale cam)]
                    (-> nd
                        (translate-to! x y)
-                       (rescale! new-scale);(/ 1.0 new-scale))
-                       )))
+                       (rescale! new-scale))));(/ 1.0 new-scale))
+                       
         _   (stick!)]       
     (doto cam
       (.addPropertyChangeListener PCamera/PROPERTY_VIEW_TRANSFORM
@@ -699,23 +669,23 @@
        (PPath/createQuadCurve (double x) (double y) (double ctrlx) (double ctrly) (double x2) (double y2))
        (.setStrokePaint (swing/get-gui-color color))
        (.setPaint (java.awt.Color. 1 0 0 0))
-     (with-node-meta meta))))
+      (with-node-meta meta))))
   ([color x y ctrlx ctrly x2 y2 ] (->quadCurve color x y ctrlx ctrly x2 y2  {})))
 
 
 (defn flatten-path [^PPath p flatness]
   (let [points (double-array 6)
         p (java.awt.geom.FlatteningPathIterator. (.getPathIterator (.getPath p) (java.awt.geom.AffineTransform.))
-                                                 flatness
-                                                 )]
+                                                 flatness)]
+                                                 
     (loop [acc []]
       (if (.isDone p)
         acc
         (do (.currentSegment p points)
             (.next p)
             (recur (conj acc  [(aget points 0)
-                               (aget points 1)
-                              ])))))))
+                               (aget points 1)])))))))
+                              
 
 (defn ->marked-path [^PPath p]
   [p
@@ -736,8 +706,8 @@
                    [ (/ (- dx) 2.0)
                      (/ dy 2.0)])              
          ctrlx (+ mpx nx)
-         ctrly (+ mpy ny)
-         ]
+         ctrly (+ mpy ny)]
+         
      (->quadCurve color x y ctrlx ctrly x2 y2 meta)))
   ([color x y x2 y2] (->orientedCurve color x y x2 y2 {})))
 
@@ -755,19 +725,19 @@
 ;;a 10x10 grid
 (defn ->grid-lines
   [^org.piccolo2d.PNode nd]
-   (let [bounds (get-full-bounds nd)
-         height (.getHeight bounds)
-         width  (.getWidth bounds)
-         x      (.getX bounds)
-         y      (.getY bounds)
-         vstep  (/ height 10.0)
-         hstep  (/ width  10.0)]
-     (into [nd]
-           (concat 
-            (for [n (range 11)]
-              (->line :black x (+ y (* n vstep)) width (+ y (* n vstep))))
-            (for [n (range 11)]
-              (->line :black (+ x (* n hstep)) y  (+ x (* n hstep)) height ))))))
+  (let [bounds (get-full-bounds nd)
+        height (.getHeight bounds)
+        width  (.getWidth bounds)
+        x      (.getX bounds)
+        y      (.getY bounds)
+        vstep  (/ height 10.0)
+        hstep  (/ width  10.0)]
+    (into [nd]
+          (concat 
+           (for [n (range 11)]
+             (->line :black x (+ y (* n vstep)) width (+ y (* n vstep))))
+           (for [n (range 11)]
+             (->line :black (+ x (* n hstep)) y  (+ x (* n hstep)) height))))))
 
 ;;Adds a colored rectangle as a background for the node.
 ;;Should this be an image?  Should we just alter the node's
@@ -822,7 +792,7 @@
                                                      this))
                                (pop_shape  []     this)
                                (wipe       [] (canvas/wipe ss) this))]
-           my-image)))
+               my-image)))
 
 (defn offset? [nd]
   (if-let [m (node-meta nd)]
@@ -918,7 +888,7 @@
           (layoutChildren [] 
             (reduce (fn [^double yoffset ^PNode nd]
                       (let [bnds (.getFullBoundsReference nd)
-                            h (.getHeight bnds )]              
+                            h (.getHeight bnds)]              
                         (.setOffset nd 0.0 (+ yoffset h))
                         (+ yoffset h)))
                     0.0
@@ -938,7 +908,7 @@
           (layoutChildren [] 
             (reduce (fn [^double yoffset ^PNode nd]
                       (let [bnds (.getFullBoundsReference nd)
-                            h (.getHeight bnds )]              
+                            h (.getHeight bnds)]              
                         (.setOffset nd 0.0 (+ yoffset h))
                         (+ yoffset spacing h)))
                     0.0
@@ -963,8 +933,8 @@
         trans (doto (AffineTransform.)
                     (.scale (double xscale) (double yscale)))
         nd  (doto (PNode.)
-              (.setTransform trans))
-        ]
+              (.setTransform trans))]
+        
     (add-child nd (as-node child))))
 
 (defn ->scaled-image [img xscale yscale & {:keys [id]}]
@@ -972,8 +942,8 @@
     (->scale xscale yscale
              (->image img))
     ((if id #(assoc % :id id) identity) 
-     {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]      
-      })))
+     {:unscale [(/ 1.0 xscale) (/ 1.0 yscale)]})))      
+      
 
 (defn atom? [x] (instance? clojure.lang.Atom x))
 
@@ -1013,9 +983,9 @@
              (add-watch alpha :fade (fn [k r old new]
                                       (when (not= old new)
                                        ; (do-scene ;;this didn't help us...
-                                         (invalidate! ^PNode nd))))
+                                         (invalidate! ^PNode nd)))))]
         ;     )
-             )]
+             
     (add-child  nd (as-node child))))
 
 ;;We want to define a level-of-detail node...
@@ -1047,8 +1017,8 @@
                                         (.setVisible large true))
                                     :small
                                     (do (.setVisible small true)
-                                        (.setVisible large false)
-                                        ))))
+                                        (.setVisible large false)))))
+                                        
                             newstate))
          _ (toggle-state :large)
          ;;what about scale/size? 
@@ -1057,8 +1027,8 @@
                        (let [s (.getScale ppaint)]
                          (let [s (if (< s thresh)
                                    :small
-                                   :large)
-                               ]
+                                   :large)]
+                               
                            (case (toggle-state s)
                              :small (.fullPaint small ppaint)
                              :large (.fullPaint large ppaint))))))
@@ -1092,74 +1062,6 @@
 ;;         block     (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))]
 ;;     (->semantic-node contents block thresh)))
 
-(comment ;testing
-  (defn random-coords [w h n]
-    (repeatedly n (fn [] [(rand-int w) (rand-int h)])))
-  (defn toggle-rect [big small x y w h]
-    (if (identical? big small)
-      (->filled-rect big x y w h)
-      (->semantic-node (->filled-rect big x y w h)
-                       (->filled-rect small x y w h))))
-  (defn ->cloud
-    ([n oncolor offcolor w h]
-     (as-node (vec (for [[x y] (random-coords w h n)]
-                     (toggle-rect oncolor offcolor x y 10 10)))))
-    ([n color w h]  (->cloud n color color w h))     
-    ([n w h] (->cloud n :green :blue w h))
-    ([n] (->cloud n 600 600)))
-  
-  ;;nested-clouds....
-
-  ;;so.....we can have an occluded container...
-  ;;note:  I think primitives have a getBounds result....
-  
-  ;;each parent contains n children.
-  ;;if level = 0, the children are regular clouds,
-  ;;else,
-  ;;  children are nested clouds....
-  ;;  each child is scaled 0.01666 of the parent...
-  ;;  so, at a given level, the child's scale is
-  ;;  0.16 ^ level
-  (defn random-color [] (java.awt.Color. (int (rand-int 255))
-                                                 (int (rand-int 255))
-                                                 (int (rand-int 255))))
-  (defn nested-cloud [n level scale-factor init-scale x y w h]
-    (if (zero? level)
-      (->translate x y (->cloud (max (rand-int n) 1) 
-                                (random-color)
-                                (random-color)
-                                w h))
-      ;;translate and scale...      
-       (let [current-scale  (* scale-factor init-scale)
-             parent-color   (random-color)
-            children (for [[x y] (random-coords w h (max (rand-int n) 1))]
-                       (nested-cloud n
-                                     (unchecked-dec level)
-                                     scale-factor
-                                     current-scale
-                                     x y w h))]
-      (->translate x y
-         (->scale scale-factor scale-factor
-                  (->lod-box  0.8 (fn [x y w h]
-                                    (let [cx (+ x (/ w 2.0))
-                                          cy (+ y (/ h 2.0))]
-                                    (as-node [(->circle parent-color
-                                                        cx
-                                                        cy  w h)
-                                              (->translate  cx  (+ cy (/ h 2.0))
-                                                  (->scale 4.0 4.0 (->text  (str "Level : " level))))
-                                              ])))
-                              (as-node (vec children))))))))
-    
-  
-  (defn sem-test []
-    (let [boxes  (->cloud 1000)
-          bbox   (.getFullBounds boxes)
-          block  (->filled-rect :grey (.getX bbox) (.getY bbox) (.getWidth bbox) (.getHeight bbox))
-          ]
-      ;;we can create a node that toggles out at a zoom threshold to a grey box...
-      (render! (->lod-box 0.25 boxes)   )))
-  )
 
 (defn ^PNode ->rotate [theta child]
   (let [theta (double theta)]                   
@@ -1204,8 +1106,8 @@
             vel       (atom (let [[vx vy] dirxy]
                               [(* vx speed)
                                (* vy speed)]))
-            remaining (atom points)
-            ]
+            remaining (atom points)]
+            
         ;;this is really just a parametric curve.
         ;;we're walking as far as possible each time step.
         ;;governed by the constraints of the linear segments.
@@ -1222,19 +1124,19 @@
                           _ (reset! remaining nil)]
                                         ;(with-meta
                                         ;res
-                      current
+                      current)
                                         ;  {:point current}
                                         ;)
-                      )  ;last point, possible small step.
+                        ;last point, possible small step.
                     :else 
                     ;;we can keep walking       
                     (let [
                           target    (first pts)
                           [dx dy]   (dist current target)
                           required  (norm dx  dy)                  
-                          covered   (-  available required)
+                          covered   (-  available required)]
                                         ; _ (println [ current :-> target :-> [dx dy] :| available :/ required := covered])
-                          ]           
+                                     
                       (if (pos? covered) ;we have excess travel capacity...
                         (do ;(println :passing-through target)
                           (recur covered
@@ -1257,14 +1159,14 @@
                               _    (reset! remaining pts)]
                                         ; (with-meta
                                         ;[offx offy]
-                          [destx desty]
+                          [destx desty]))))))))
                                         ;{:point @pos}
                                         ;  )
                           ;;total displacement from current
                                         ;{:position pos :velocity vel :remaining remaining}
-                          ))))))))
+                          
         ;;no points...
-        (fn [t] nil))))
+      (fn [t] nil))))
 
 ;;follows along a path.
 (defn follow-path!
@@ -1282,15 +1184,6 @@
          (f nd (double (.nth res 0)) (double (.nth res 1)))
          (when on-finish (on-finish nd))))))
   ([nd pts speed] (follow-path! nd pts speed translate!)))
-
-(comment ;testing
-  (def the-path (->orientedCurve :black 0 0 200 200))
-  (def the-points (flatten-path the-path 1))
-  (def the-glyph (->rect :red 0 0 10 10))
-  (def update! (follow-path! the-glyph (cycle (concat the-points (reverse the-points))) 15))
-  
-)
-
 
 ;;simulates a node who's state changes over time.  Specifically, the
 ;;paint decays to nothing linearly.
@@ -1363,7 +1256,7 @@
 (defn with-input! [nd p]
   (do (.addInputEventListener  ^PNode (as-node nd)
                                ^PInputEventListener (events/as-listener p))
-        nd))
+      nd))
 
 (defn center-offscreen!
   ([^POffscreenCanvas cnv ^PBounds bnds]
@@ -1385,8 +1278,8 @@
    ; (when handler (.addInputEventListener layer handler))
     (center-offscreen! cnv)
                                         ;(show! cnv)
-    cnv
-    ))
+    cnv))
+    
 
 ;;This allows us to render out to graphics.
 (defn render-to [nd ^java.awt.Graphics2D graphics]
@@ -1503,8 +1396,8 @@
           old-stroke    (.getStroke nd)
           old-paint     (.getStrokePaint nd)
           new-stroke    (or old-stroke
-                            (java.awt.BasicStroke.))
-          ]
+                            (java.awt.BasicStroke.))]
+          
       (-> nd
           (vary-node-meta 
            assoc :highlighted [old-stroke old-paint])
@@ -1513,7 +1406,7 @@
 
 (defn unhighlight-stroke! [nd]
    (if-let [hinfo (get (node-meta nd)
-                        :highlighted)]
+                       :highlighted)]
       (-> nd
           (vary-node-meta dissoc :highlighted)
           (stroke-paint! (second hinfo))
@@ -1539,11 +1432,11 @@
 
 (defn unhighlight-bounds! [nd]
    (if-let [hinfo (get (node-meta nd)
-                        :highlighted)]
+                       :highlighted)]
       (-> nd
           (vary-node-meta dissoc :highlighted)
-          (drop-child! hinfo)
-          )
+          (drop-child! hinfo))
+          
       nd))
 
 (defn highlight! [nd color]
@@ -1596,10 +1489,10 @@
   (let [on-change (fn changed [k r old new]
                     (do-scene
                      (xform nd old new)))
-        _          (add-watch ref :map-node  on-change)
-        ]    
-    nd
-    ))
+        _          (add-watch ref :map-node  on-change)]
+            
+    nd))
+    
 
 ;;so
 
@@ -1619,7 +1512,7 @@
 (defn ^PAffineTransform as-xform [obj]
   (if (or (instance? org.piccolo2d.util.PAffineTransform obj)
           (instance? java.awt.geom.AffineTransform obj))
-          obj
+      obj
         (.getGlobalTransform ^PNode (as-node obj))))
 
 (defn ^PAffineTransform inverse [inv]
@@ -1666,16 +1559,16 @@
   ([nd ^PAffineTransform xform]
    (.getGlobalToLocalTransform
     ^PNode (as-node nd)
-    xform
-    ))
+    xform))
+    
   ([nd] (global->local-transform nd (PAffineTransform.))))
 
 (defn ^PAffineTransform local->global-transform
   ([nd ^PAffineTransform xform]
    (.getLocalToGlobalTransform
     ^PNode (as-node nd)
-    xform
-    ))
+    xform))
+    
   ([nd] (local->global-transform nd (PAffineTransform.))))
 
 (defn ^PAffineTransform global-transform [nd] (global->local-transform nd))
@@ -1712,12 +1605,12 @@
           ep    (events/event-processor
                  :mouseEntered  (fn [e]
                                   (.setVisible open true)
-                                  (.setVisible closed false)
-                                  )
+                                  (.setVisible closed false))
+                                  
                  :mouseExited   (fn [e]
                                   (.setVisible open false)
                                   (.setVisible closed true)))
-      _ (.setVisible closed false)]
+          _ (.setVisible closed false)]
       (doto (as-node [open closed])
         (.addInputEventListener ep))))
   
@@ -1727,25 +1620,25 @@
           _    (.setVisible high false)
           ep   (events/event-processor
                  :mouseEntered  (fn [e]
-                                  (.setVisible high true)
-                                  )
+                                  (.setVisible high true))
+                                  
                  :mouseExited   (fn [e]
-                                   (.setVisible high false)
-                                   ))]
+                                   (.setVisible high false)))]
+                                   
       (doto (as-node [nd high])
         (.addInputEventListener ep))))
        
-    (defn ->click-toggle [^PNode open ^PNode closed]
-      (let [prior (atom true)
-            ep    (events/event-processor
-                   :mouseClicked  (fn [e]
-                                    (swap! prior not)
-                                    (.setVisible open @prior)
-                                    (.setVisible closed (not @prior))
-                                    ))
-            _ (.setVisible closed false)]
-        (doto (as-node [open closed])
-          (.addInputEventListener ep))))
+  (defn ->click-toggle [^PNode open ^PNode closed]
+    (let [prior (atom true)
+          ep    (events/event-processor
+                 :mouseClicked  (fn [e]
+                                  (swap! prior not)
+                                  (.setVisible open @prior)
+                                  (.setVisible closed (not @prior))))
+                                    
+          _ (.setVisible closed false)]
+      (doto (as-node [open closed])
+        (.addInputEventListener ep))))
           
   (defn ->color-toggle [color nd]
     (let [prior (atom nil)
@@ -1773,32 +1666,32 @@
 ;  (defn highlight! [border nd]
 ;    (let [bnds (.getBounds nd)
     
-    (defn ->print-toggle [nd]
-      (let [prior (atom nil)
-            ep (events/event-processor
-                :mouseEntered  (fn [e]                               
-                                 (println "entered!")
-                                 )
-                :mouseExited   (fn [e]
-                               (println "Exited!"
-                                        ))
-                :mouseMoved (fn [e] nil))]
-        (doto nd (.addInputEventListener ep))))
+  (defn ->print-toggle [nd]
+    (let [prior (atom nil)
+          ep (events/event-processor
+              :mouseEntered  (fn [e]                               
+                               (println "entered!"))
+                                 
+              :mouseExited   (fn [e]
+                              (println "Exited!"))
+                                        
+              :mouseMoved (fn [e] nil))]
+      (doto nd (.addInputEventListener ep)))))
 
 
     ;;Testing to correct layout problems with shelf and stack.
     
-    )
+    
     
             
 (comment ;;testing menus
   (def simple-menu (gui/map->reactive-menu "Debug"
                                            {"Debug Item 1" "Hello"
                                             "Debug Item 2" "World"}))
-  (def main-menu (gui/menu-bar (:view simple-menu)))
+  (def main-menu (gui/menu-bar (:view simple-menu))))
 ;;         debug-menu      (gui/map->reactive-menu "Debug"
 ;;                                                 debug-menu-spec)
 ;;         main-menu       (gui/menu-bar (:view project-menu)
 ;;                                       (:view processing-menu)
 ;;                                       (:view debug-menu))
-  )
+  

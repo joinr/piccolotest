@@ -1,5 +1,6 @@
 (ns piccolotest.tests
-  (:require [piccolotest.plots :refer :all]))
+  (:require [piccolotest.plots :refer :all]
+            [piccolotest.sample :as p]))
 
 ;;this is just for testing..
 (defn clamp [l r x]
@@ -54,15 +55,15 @@
         add-samples (if sliced (fn add-sliced-sample [] (add-sample (next-slice!)))
                         (fn add-samples [] (binding [*out* out]
                                              (doseq [x  (next-slice!)]
-                                               (add-sample x)))))
-                                 ]
+                                               (add-sample x)))))]
+                                 
     (do ;(swap! repaint-list conj paint-state)
       (future (while @alive
                 (when @plotting
                   (do (add-samples) 
                       (aset paint-state 1 true)))
-                (Thread/sleep 16)))
-      )))
+                (Thread/sleep 16))))))
+      
 
 (defn n-plots [n & {:keys [plot-type] :or {plot-type :area}}]
   (let [
@@ -73,5 +74,5 @@
                        (range n))
         _ (doseq [p the-plots] (plot-randomly! p))
         c (apply p/->stack the-plots)]
-    (p/render! c)
-    ))
+    (p/render! c)))
+    
