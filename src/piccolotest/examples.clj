@@ -125,7 +125,7 @@
                       (if-let [^org.piccolo2d.nodes.PImage itm (get sprites c)]
                         (->image (.getImage itm))
                         (let [s  (->sprite (->filled-rect c 0 0 20 20))
-                              _ (swap! sprites assoc c s)]
+                              _  (swap! sprites assoc c s)]
                           s))))
         random-rect  (fn ([r g b x y]
                           (let [img (get-sprite r g b)]

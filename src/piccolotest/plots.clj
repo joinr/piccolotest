@@ -214,8 +214,7 @@
         push-slice  (when sliced
                       (fn push-slice [x]
                         (let [nxt  (spork.trends/add-slice @data x)
-                              _    (reset! data nxt)]                   
-                              
+                              _    (reset! data nxt)]     
                           nxt)))
         ;;need to change this to work with piccolo.
         ;; add-sample (if sliced (fn add-sample! [x]
