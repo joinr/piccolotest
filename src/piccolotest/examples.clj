@@ -28,7 +28,7 @@
                                          (do (pop-child! circles)
                                              (picc/invalidate! circles))})
         cnv      (render! [(->grid-lines (->filled-rect :red 0 0 600 600)) circles controls])
-        _        (->stick-to-camera controls (active-camera cnv))]
+        _        (add-sticky cnv  controls)]
     cnv))
 
 ;;so, lets expand on our example.
@@ -53,9 +53,9 @@
 ;;==================
 (defn simple-test [& {:keys [dur] :or {dur 2000}}]
   (let [fr    (->filled-rect :red 0 0 100 100)
-        cnv   (render! fr)
+        cnv   (render! [(->filled-rect :white 0 0 1100 1100) fr])
         tl    (derive-timeline fr)
-        clock (:clock @tl)
+        clock (:clock @tl)        
         ;;creates something akin to a promise...a pending activity that
         ;;runs until time in clock = 20000
         _     (animate-to-position-scale-rotation fr 100 1000 1.0 0 dur tl)]
@@ -178,8 +178,8 @@
                                                           (Thread/sleep 20)))))
                       "Stop!"   (swap! timer 
                                   #(do (when (future? %) (future-cancel %))))})
-        cnv     (picc/render! [fr controls]) ;;ensures it's rooted in a scene.
-        _       (->stick-to-camera controls (active-camera cnv))
+        cnv     (picc/render! [fr #_controls]) ;;ensures it's rooted in a scene.
+        _       (add-sticky cnv  controls)
         tl      (picc/derive-timeline fr clock)
         ;;queue up an activity, but nothing will happen unless we enable
         ;;time to flow!
