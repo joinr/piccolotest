@@ -278,18 +278,21 @@
 
 (defn sem-test-nested []
   (render! (->cartesian (nested-cloud 5  5 0.8 1 0 0  500 500))))
-                
 
 ;;path testing
 (defn path-test []
   (let [the-path   (->orientedCurve :black 0 0 200 200)
         the-points (flatten-path the-path 1)
-        the-glyph  (->rect :red 0 0 10 10)
-        update!    (follow-path! the-glyph 
+        the-glyph  (->circle :red 0 0 10 10)
+        update!    (follow-path! the-glyph
                      (cycle (concat the-points (reverse the-points))) 15)]
-    (picc/render! [the-path the-glyph])))
-
-    
+    (picc/render! [the-path the-glyph] :render-options {:default     :low
+                                                        :interacting :low
+                                                        :animating   :low})
+    (let [clock (:clock @(picc/derive-timeline the-glyph))]
+      (dotimes [i 1000]
+        (swap! clock (fn [x] (update! 0.5) (unchecked-add x 16)))
+        (Thread/sleep 16)))))
 
 ;;highlighting/selection/picking
 ;;highlighting

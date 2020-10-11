@@ -1183,7 +1183,7 @@
        (if-let [^clojure.lang.PersistentVector res (next-point t)]        
          (f nd (double (.nth res 0)) (double (.nth res 1)))
          (when on-finish (on-finish nd))))))
-  ([nd pts speed] (follow-path! nd pts speed translate!)))
+  ([nd pts speed] (follow-path! nd pts speed translate-to!)))
 
 ;;simulates a node who's state changes over time.  Specifically, the
 ;;paint decays to nothing linearly.
